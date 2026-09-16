@@ -3,8 +3,12 @@
 Input seat shape (records from the checkout/seatmap response's embedded
 seats.seatmap JSON array): {"row": int, "column": int,
 "state": "available"|"booked", "type": str, ...other fields ignored}.
-Seats with type != "" (e.g. "WC" wheelchair spots) are excluded — they're a
-different ticket category than the standard seats being searched for.
+Seats whose type differs from the room's majority type (e.g. "WC"
+wheelchair spots, paired recliners, footstools) are excluded — they're a
+different ticket category than the standard seats being searched for. The
+exact string used for the standard category varies by room (typically ""
+but sometimes a room-specific code), so the majority value is used rather
+than a hardcoded "".
 """
 import argparse
 import json
@@ -12,7 +16,20 @@ import sys
 
 
 def standard_seats(seats):
-    return [s for s in seats if s.get('type', '') == '']
+    """Standard (bookable) seats are those with the room's most common
+    `type` value. Special categories (wheelchair, paired recliners,
+    footstools, etc.) are always a minority within a room, and the exact
+    type string used for standard seats varies by room (e.g. '' in most
+    rooms, but a room-specific code like 'test4' in others) — so the
+    majority value, not a hardcoded '', is the robust signal."""
+    if not seats:
+        return []
+    type_counts = {}
+    for s in seats:
+        t = s.get('type', '')
+        type_counts[t] = type_counts.get(t, 0) + 1
+    majority_type = max(type_counts, key=type_counts.get)
+    return [s for s in seats if s.get('type', '') == majority_type]
 
 
 def zone_bounds(seats):

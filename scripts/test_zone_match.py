@@ -13,6 +13,15 @@ class TestStandardSeats(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['column'], 0)
 
+    def test_majority_type_is_treated_as_standard_even_when_nonempty(self):
+        # some rooms (e.g. D-BOX) label their standard seats with a
+        # room-specific type string instead of "" - the majority type in
+        # the room should be treated as standard, not hardcoded to ''
+        seats = [seat(0, c, seat_type='test4') for c in range(3)] + [seat(0, 10, seat_type='WC')]
+        result = standard_seats(seats)
+        self.assertEqual(len(result), 3)
+        self.assertTrue(all(s['type'] == 'test4' for s in result))
+
 
 class TestZoneBounds(unittest.TestCase):
     def test_computes_thirds_from_min_max_row_and_column(self):
@@ -72,6 +81,11 @@ class TestFindMatch(unittest.TestCase):
         self.assertTrue(result['matched'])
         matched_cols = {s['column'] for m in result['matches'] for s in m['seats']}
         self.assertNotIn(10, matched_cols)
+
+    def test_find_match_works_when_majority_type_is_nonempty(self):
+        seats = [seat(0, c, seat_type='test4') for c in range(4)] + [seat(0, 10, seat_type='WC')]
+        result = find_match(seats, n=3, zone_row=None)
+        self.assertTrue(result['matched'])
 
 
 if __name__ == '__main__':
