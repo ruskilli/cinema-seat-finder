@@ -82,6 +82,16 @@ info, then seat-finding:
 </tr>
 </table>
 
+All of Filmweb's data is in Norwegian, so the skill works natively in
+Norwegian too — a full session, unprompted, in one screenshot:
+
+<details>
+<summary>Full conversation in Norwegian (click to expand)</summary>
+
+![A complete conversation in Norwegian, covering a location lookup, listing, movie info, and seat-finding](docs/assets/demo-5-norwegian-session.png)
+
+</details>
+
 ## How to use this skill
 
 Open Claude Code with this repo as (or inside) the working directory, so it
