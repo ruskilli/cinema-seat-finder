@@ -1,5 +1,7 @@
 # cinema-seat-finder
 
+![cinema-seat-finder](docs/assets/cinema-seat-finder.png)
+
 A Claude Code skill that lists today's showtimes at *any* Norwegian cinema
 — nationwide, or narrowed to a town you name — and, for a given film, finds
 which showtimes at Trondheim Kino, Steinkjer kino, Kimen kino (Stjørdal),
