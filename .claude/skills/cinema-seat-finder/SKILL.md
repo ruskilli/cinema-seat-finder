@@ -1,20 +1,321 @@
 ---
 name: cinema-seat-finder
-description: "Find Trondheim Kino showtimes today with N contiguous available seats in a preferred zone (front/middle/back, left/center/right). Use when the user asks something like 'N of us want to see [film], ideally seated in the back' instead of manually checking each showtime's seatmap."
+description: "List today's showtimes at ANY Norwegian cinema (nationwide or a named town), look up/resolve a town or cinema by name, look up a movie's synopsis/genre/runtime/age rating, or find N contiguous available seats in a preferred zone (front/middle/back, left/center/right) at Trondheim Kino, Steinkjer kino, Kimen kino (Stjørdal), Haugesund kino, Caroline kino (Kristiansund), Aurora Kino (Tromsø/Narvik/Alta/Kirkenes/Lakselv), ODEON Kino (any city, e.g. Oslo/Stavanger/Sandnes/Ålesund/Skien/Moss/Lillestrøm/Sandvika/Ski/Sotra), or any ebillett.no venue (~65 mostly small independent theaters nationwide) - the only cinemas seat-checking is supported for. Use when the user asks something like 'N of us want to see [film], ideally seated in the back', 'what's playing tonight' / 'what movies are on today [in <town>]', 'is there a cinema in <town>' / 'what towns do you cover', or 'what's [film] about' / 'how long is [film]' / 'what age rating is [film]'."
 ---
 
 # cinema-seat-finder
 
-Finds which of today's Trondheim Kino showtimes for a given film actually
-have room for a group together in their preferred part of the room —
-instead of the user manually clicking through film → time → seat count →
-seatmap for every candidate showing.
+Lists today's showtimes at any Norwegian cinema — nationwide by default, or
+narrowed to a town the user names — looks up towns/cinemas by name, and
+looks up a movie's synopsis/genre/runtime/age rating. For a given film, it
+also finds which showtimes at Trondheim Kino, Steinkjer kino, Kimen kino
+(Stjørdal), Haugesund kino, Caroline kino (Kristiansund), Aurora Kino
+(Tromsø, Narvik, Alta, Kirkenes, Lakselv), ODEON Kino (any city), or any
+ebillett.no venue (~65 mostly small independent theaters nationwide) — the
+only cinemas seat-checking is supported for — actually have room for a
+group together in their preferred part of the room, instead of the user
+manually clicking through film → time → seat count → seatmap for every
+candidate showing.
 
-**Scope:** Trondheim Kino only. Today's date only, unless the user
-explicitly gives another date. Never completes a purchase — it only reports
-which showtimes are viable and their booking links.
+**Scope:** *Listing* what's on, and *looking up* towns/cinemas, works
+nationwide — any Norwegian cinema Filmweb knows about. *Seat-finding* only
+works for three checkout platforms (see "Known checkout platforms" below):
+Filmgrail/Mars (ten cinemas, `filmgrail_checkout.py` +
+`filmgrail_zone_match.py`), ODEON's Cinema API backend (any ODEON city,
+`odeon_checkout.py` + `odeon_zone_match.py`), and the ebillett.no/DX
+platform (any ebillett.no venue, `ebillett_checkout.py` +
+`ebillett_zone_match.py`) — if a film is only playing somewhere else, say
+so plainly rather than silently returning nothing. Today's date only,
+unless the user explicitly gives another date. Never completes a purchase
+— it only reports which showtimes are viable and their booking links.
+
+## Known checkout platforms (background)
+
+### Filmgrail/Mars cinemas
+
+`scripts/filmgrail_checkout.py` drives the same checkout API this skill uses
+for Trondheim Kino. Surveyed 2026-09-16 via `discover_shows.py --location
+""` (empty string — Filmweb returns every showtime nationwide when
+`location` is blank/omitted-as-empty, 893 shows across 110 cinemas that
+particular day; this is how the full picture below was gathered in one
+call instead of guessing town names), then a live but read-only page fetch
+per unique checkout domain checking for the embedded `TicketsCategories`
+block (no checkout transaction opened for that survey pass).
+
+**In scope, fully working** — each confirmed live 2026-09-16 end to end
+(real transaction, real seatmap, real `filmgrail_zone_match.py` match, clean cancel)
+and all sharing the same integer `row`/`column` seatmap grid as Trondheim
+Kino itself:
+
+| Cinema | Town(s) | Domain |
+|---|---|---|
+| Trondheim Kino | Trondheim | `www.trondheimkino.no` |
+| Steinkjer kino | Steinkjer | `www.trondheimkino.no` |
+| Kimen kino | Stjørdal | `www.trondheimkino.no` |
+| Haugesund kino | Haugesund | `www.edda-kino.no` |
+| Caroline kino Kristiansund | Kristiansund | `www.carolinekino.no` |
+| Tromsø Kino | Tromsø | `fokus.aurorakino.no` |
+| Narvik kino | Narvik | `narvik.aurorakino.no` |
+| Alta kino | Alta | `alta.aurorakino.no` |
+| Kirkenes kino | Kirkenes | `kirkenes.aurorakino.no` |
+| Lakselv kino | Lakselv | `lakselv.aurorakino.no` |
+
+These ten `firmName` values are exactly what the allow-list in Step 1/Step
+2 below checks against.
+
+Confirmed on the same checkout API but **NOT in scope** — its seatmap uses
+pixel `coordX`/`coordY` coordinates instead of the grid above (no `column`
+field at all — see `filmgrail_checkout.py`'s module docstring), which
+`filmgrail_zone_match.py` doesn't understand:
+
+| Cinema | Town | Domain |
+|---|---|---|
+| Bergen kino | Bergen | `www.bergenkino.no` |
+
+Confirmed **not** on this platform at all (different checkout vendor — do
+not attempt `filmgrail_checkout.py` against these):
+
+| Chain | Town(s) seen | Domain |
+|---|---|---|
+| NFKino | Arendal, Farsund, Drammen (KinoCity), Kristiansand, Asker, Askim, Halden, Horten, Hønefoss, Tønsberg (Kilden), Oslo, Sarpsborg, Verdal, Bergen (Lagunen) | `nfkino.no` |
+
+(ebillett.no is a different, *supported* platform — see its own section below, not "not on this platform.")
+
+Bygdekinoen (the mobile-cinema circuit, `kinologg.kino.no`) is excluded for
+a stronger reason than "different vendor": its screenings run in village
+halls and other venues with unnumbered, unreserved seating, so there is no
+seatmap to seat-check at all, regardless of platform. Never attempt
+seat-checking against a Bygdekinoen showtime even if the vendor question
+were somehow moot.
+
+If a new candidate cinema turns up later (another `<town>.aurorakino.no`
+subdomain not yet checked, say), verify it the same way before adding it to
+the allow-list: a real `check_seats()` call, confirm `status: 'ok'` with a
+`row`/`column` (int) seatmap shape like the table above (not
+`coordX`/`coordY`), and confirm `filmgrail_zone_match.py` produces a sane match —
+don't add a cinema on domain-pattern-matching alone, since Bergen proves
+sharing the checkout API doesn't guarantee the same seatmap shape.
+
+### ODEON (Cinema API)
+
+ODEON's own site (`www.odeonkino.no`) is behind an active Cloudflare
+bot-challenge on every page (`cf-mitigated: challenge` to any plain
+request) and is never contacted by this skill. Its booking pages instead
+call a separate, genuinely open backend — `services.cinema-api.com` — which
+answers plain unauthenticated GETs directly (see `odeon_checkout.py`'s
+module docstring for exactly which endpoints, and the README's "Public
+APIs only" section for why this distinction matters). `odeon_checkout.py`
++ `odeon_zone_match.py` handle this platform; unlike Filmgrail, checking
+seats is purely read-only — no transaction or hold is ever opened.
+
+ODEON showtimes are identified by **domain, not `firmName`** — unlike the
+Filmgrail cinemas above, ODEON's chain spans many different `firmName`
+strings for the same underlying platform (some branded "ODEON \<city\>",
+others independently, e.g. "Stavanger Kino"), all sharing the checkout
+domain `www.odeonkino.no`. A candidate is in scope for this platform when
+its `ticketSaleUrl` has that domain, regardless of `firmName`.
+
+Confirmed live 2026-09-16, real seatmap + real `odeon_zone_match.py` match,
+for two different cities sharing this backend (Oslo and Stavanger) — both
+returned the same clean integer `row`/`column` grid shape, so this is
+treated as one platform rather than requiring a per-city check the way
+Filmgrail's Bergen/Trondheim split did. `firmName` values seen under
+`www.odeonkino.no` so far: ODEON Oslo, ODEON Ålesund, ODEON Skien, ODEON
+Moss, ODEON Lillestrøm, ODEON Sandvika, ODEON Ski, ODEON Sotra, Stavanger
+Kino, Sandnes Kino — this list is illustrative, not the matching rule; the
+domain is.
+
+### ebillett.no (eBillett/DX)
+
+`checkout.ebillett.no` carries no bot protection at all — every call in
+`ebillett_checkout.py` is a plain HTTP request (no browser). What made this
+platform take real effort wasn't detection, it was that its actual
+mechanism doesn't match what the static setup-page HTML implies:
+
+- The ticket-quantity `<select>` dropdowns have no `name` attribute even
+  after the page renders, so the obvious guesses (`qty_1`, `qty[1]`, ...)
+  silently fail — the server just re-shows the same quantity page with
+  `200`. The real submission is a parallel-array shape, confirmed directly
+  from a live browser's Request Payload: `categories[0]=<categoryId>
+  &antall[0]=<count>&events[0]=<arrnr>` ("antall" = Norwegian for
+  "quantity"), alongside the visible hidden fields and any venue-specific
+  `group_code<N>` fields (submitted empty).
+- A successful submission is a `302` whose `Location` header is
+  `/{p_id}/events/{arrnr}/purchase/{PHPSESSID}/{reservationId}/seating` —
+  the token segment is literally that request's own `PHPSESSID` cookie
+  value (confirmed directly), and `{reservationId}` is assigned by the
+  server on that call, not derivable in advance.
+- The real seatmap needs `.../seatmap?a=select&e=<reservationId>&c=0` — a
+  plain GET with no query returns no seat data at all.
+
+`ebillett_checkout.py` + `ebillett_zone_match.py` handle this platform.
+ebillett.no showtimes are identified by **domain**, same reasoning as
+ODEON: `ticketSaleUrl` starts with `https://checkout.ebillett.no/`,
+regardless of `firmName` — one shared backend serves ~65 different
+theaters, each with its own `firmName`.
+
+**Cleanup is honest, not Filmgrail-strength.** The site's own close ("X")
+button resubmits the same form with `action=cancel` instead of
+`action=continue`, and `ebillett_checkout.py` always attempts this — but
+confirmed live that it does **not** visibly release the held seats
+immediately (rechecking the seatmap right after, and again a few seconds
+later, still showed them held). The real, repeatedly-confirmed safety net
+is that ebillett.no reservations self-expire after about a minute of
+inactivity regardless. So `check_seats()`'s `cancelStatus: "attempted"`
+here means "the cancel request was sent", not "the hold is confirmed
+released" — never treat it as equivalent to Filmgrail's `"cancelled"`.
+
+Confirmed live 2026-09-16, real reservation + real seatmap + real
+`ebillett_zone_match.py` match, for two different venues (Rana kino and
+Stryn kino) sharing this backend, both returning the same seat shape
+`ebillett_checkout.py` expects.
 
 ## Step 1 — Parse the request
+
+First, figure out which of four things the user is asking for:
+
+- **Location query** — asking about towns/cinemas themselves, not
+  showtimes (e.g. "is there a cinema in Bergen", "what towns do you
+  cover", "what cinemas are in Trondheim"). Handle this per **Location
+  query** below and stop there.
+- **Movie info query** — asking about a film itself, not showtimes or
+  seats (e.g. "what's Fjord about", "how long is Fjord", "what age rating
+  is Fjord"). Handle this per **Movie info query** below and stop there.
+- **Listing request** — no specific film named (e.g. "what's playing
+  tonight", "what movies are on today [in <town>]"). Handle this per
+  **Listing request** below and stop there — do not proceed to
+  seat-checking.
+- **Seat-finding request** — names a film and (usually) a party size, e.g.
+  "3 of us want to see Spider-Man tonight [in <town>]". Parse the fields
+  below and continue through the rest of this skill.
+
+### Resolving a location (shared by Listing and Seat-finding)
+
+If the user names a town, resolve it before using it as `--location` —
+`discover_shows.py`'s show-discovery needs the *exact* canonical spelling
+with correct Norwegian diacritics (confirmed live 2026-09-16: "Tromso"
+returns nothing, "Tromsø" works):
+
+```bash
+python3 scripts/discover_shows.py --search-location "<town as the user typed it>"
+```
+
+- Exactly one name back → use it as `--location`.
+- Several back (e.g. "berg" → `["Bergen", "Kongsberg", "Rødberg",
+  "Tønsberg"]`) → ask the user which one they meant before proceeding.
+- Empty array → this search does plain substring/prefix matching on
+  correctly-accented text, not diacritic-insensitive fuzzy matching (see
+  `discover_shows.py`'s module docstring) — try a shorter, more likely
+  prefix of the user's spelling before giving up; if still nothing, tell
+  the user you couldn't find that town and ask them to confirm the
+  spelling.
+- Non-zero exit or invalid JSON stdout → the search itself failed — report
+  that rather than treating it as "no such town."
+
+If the user names no town at all, skip this — use `--location ""`
+(nationwide) in the steps below.
+
+### Location query
+
+For a general "what towns/cinemas do you cover" question, answer from
+"Known checkout platforms" above for *seat-finding* coverage (the Filmgrail
+table, plus ODEON and ebillett.no — mention both of those cover any
+city/venue on their platform, not a fixed list), and make clear that's
+narrower than *listing*, which covers every cinema nationwide.
+
+For a specific town (e.g. "is there a cinema in Ålesund"), resolve it per
+**Resolving a location** above, then run:
+
+```bash
+python3 scripts/discover_shows.py --location "<resolved town>" --list-cinemas
+```
+
+This lists the cinema *buildings* Filmweb knows about there (e.g.
+`[{"name": "Nova", "firmId": 12}, {"name": "Prinsen", "firmId": 12}]` for
+Trondheim). Report the building names plainly, and note whether that town
+is seat-finding-supported — one of the ten Filmgrail cinemas (cross-check
+against the table above), any ODEON city, any ebillett.no venue, or
+listing-only. An empty array means no cinema found for that resolved
+town — say so.
+
+### Movie info query
+
+Resolve the title to a Filmweb movie id first:
+
+```bash
+python3 scripts/discover_shows.py --search-movie "<film title as the user typed it>"
+```
+
+- Exactly one plausible result → use its `mainVersionId`.
+- Several results → titles are frequently reused/similar (e.g. searching
+  "Fjord" also returns "Storfjord 1829", "Deilig er fjorden", etc. —
+  confirmed live 2026-09-16) — pick the one whose `title` matches what the
+  user asked for; if more than one is plausible, confirm with the user
+  before proceeding, the same as Step 2's fuzzy-title handling for
+  seat-finding.
+- Empty array → tell the user you couldn't find that film and ask them to
+  confirm the title, rather than guessing.
+- Non-zero exit or invalid JSON stdout → the search itself failed — report
+  that rather than "no such film."
+
+Then fetch the full info:
+
+```bash
+python3 scripts/discover_shows.py --movie-id "<mainVersionId from above>"
+```
+
+This returns `title`, `titleOriginal`, `genres`, `lengthInMinutes`,
+`rating` (age rating), `synopsisIngress` (short), `synopsisBodyText`
+(long), `premiere`, `productionYear`, `userRatingAvg`/`userRatingNum`
+(Filmweb's own user rating), `languages`, and `nationalities`. Answer only
+what the user actually asked (runtime, age rating, synopsis, genre,
+etc.) — don't dump every field back at them unprompted; a genuinely
+open-ended "tell me about X" is the one case where presenting most of it
+(title, genre, runtime, rating, synopsis) makes sense. **All text fields
+are in Norwegian** (same as the rest of Filmweb's data) — translate for
+the user unless they're clearly asking in Norwegian themselves. Never
+seat-check or list showtimes as part of this — that's a separate request
+type, only proceed there if the user follows up asking for showtimes or
+seats.
+
+### Listing request
+
+Resolve any town the user named per **Resolving a location** above; use
+`--location ""` if none was named. Then run, from the project root:
+
+```bash
+python3 scripts/discover_shows.py --date <YYYY-MM-DD> --location "<resolved town, or "" for nationwide>" [--exclude-past]
+```
+
+Add `--exclude-past` whenever `<YYYY-MM-DD>` is today (the default) — the
+API's `--date` filter is date-only, so without it a showtime that already
+started or finished earlier today would be listed as if it were still on.
+Omit it for an explicitly future (or past) date the user asked for.
+
+(no `--movie-title` — this returns every showtime for the day.) This is
+**not** restricted to the seat-finding-supported cinemas — list everything
+Filmweb returns, any chain, since this is purely informational and
+Filmweb's discovery already covers every Norwegian cinema regardless of
+checkout platform. The same error handling as Step 2 applies: a non-zero
+exit, or stdout that isn't valid JSON, means discovery itself failed —
+report that rather than "nothing playing today."
+
+Group the results by `movieTitle` and present each film with its showtimes
+(time, `screenName`, `theaterName`, and — since results may now span many
+towns/chains — `firmName` too whenever it isn't already obvious from
+`theaterName`), sorted by start time. Include each showtime's
+`ticketSaleUrl` as a booking link whenever it's non-empty — this applies to
+*every* cinema listed, not just the seat-finding-supported ones (see "Known
+checkout platforms" above): a showtime at, say, a Bygdekinoen screening or
+an NFKino cinema has no seat-checking available, but the user can still
+follow the link and check/book manually, so don't withhold it just because
+this skill can't check it itself. Stop here — do not seat-check anything
+unless the user follows up naming a film and party size. (If they do, and
+that film turns out to only be playing at cinemas outside all three
+seat-finding platforms, Step 2/4 below handles saying so plainly rather
+than reporting no matches.)
+
+### Seat-finding request
 
 Extract from the user's message:
 - **Film title** (may be approximate/partial — disambiguate in Step 2).
@@ -24,194 +325,191 @@ Extract from the user's message:
   or both may be omitted (treat omitted as "any").
 - **Date**: defaults to today (system date) unless the user specifies one —
   pass it as `YYYY-MM-DD` to the scripts below.
+- **Location** (optional): a town the user named, e.g. "in Bergen" or "at
+  Kimen kino" — resolve it per **Resolving a location** above before Step
+  2. If none was named, use `--location ""` (nationwide) in Step 2.
 
 ## Step 2 — Discover candidate showtimes
 
-Run, from the project root:
+Run, from the project root, using the location resolved in Step 1
+(`--location ""` if the user named no town):
 
 ```bash
-python3 scripts/discover_shows.py --date <YYYY-MM-DD> --movie-title "<film title>"
+python3 scripts/discover_shows.py --date <YYYY-MM-DD> --location "<resolved town, or "" for nationwide>" --movie-title "<film title>" [--exclude-past]
 ```
+
+Same `--exclude-past` rule as **Listing request** above: include it when
+`<YYYY-MM-DD>` is today, omit it for an explicitly different date — a
+seat-finding candidate that already started or finished isn't one worth
+seat-checking in Step 3.
 
 - If the script exits with a non-zero status, or its stdout is not valid JSON
   (as opposed to a valid empty array `[]`), the discovery step itself failed
   — report that to the user (e.g. the API may be down or unreachable) rather
   than treating it the same as "no showings today."
-- If this returns an empty array, retry **without** `--movie-title` for that
-  date, and check whether any returned `movieTitle` looks like a fuzzy match
-  for what the user asked for (titles are in Norwegian and may not match the
-  user's exact wording). If you find a plausible match, confirm it with the
-  user before proceeding. If nothing plausible exists, tell the user there
-  are no showings of that film today and stop.
+- If this returns an empty array, retry **without** `--movie-title` (same
+  location and date), and check whether any returned `movieTitle` looks
+  like a fuzzy match for what the user asked for (titles are in Norwegian
+  and may not match the user's exact wording). If you find a plausible
+  match, confirm it with the user before proceeding. If nothing plausible
+  exists, tell the user there are no showings of that film today (in that
+  town, if one was given) and stop.
 - Otherwise, you now have the full candidate list: each entry has
   `showStart`, `screenName`, `theaterName`, `firmName`, `ticketSaleUrl`.
-- Before seat-checking any candidate, **skip** (do not seat-check) any
-  candidate whose `firmName` is not exactly `"Trondheim Kino"`. This skill is
-  scoped to that specific chain, and the discovery API's `location`-based
-  query alone doesn't guarantee every result belongs to it — other venues
-  could theoretically appear under the same city.
+- Classify each candidate into exactly one of four groups:
+  - **Filmgrail** — `firmName` exactly one of the ten values listed under
+    "Filmgrail/Mars cinemas" above (`"Trondheim Kino"`, `"Steinkjer kino"`,
+    `"Kimen kino"`, `"Haugesund kino"`, `"Caroline kino Kristiansund"`,
+    `"Tromsø Kino"`, `"Narvik kino"`, `"Alta kino"`, `"Kirkenes kino"`,
+    `"Lakselv kino"`).
+  - **ODEON** — `ticketSaleUrl` starts with `https://www.odeonkino.no/`
+    (domain-based, not `firmName`-based — see "ODEON (Cinema API)" above
+    for why).
+  - **ebillett.no** — `ticketSaleUrl` starts with
+    `https://checkout.ebillett.no/` (domain-based, same reasoning as
+    ODEON — see "ebillett.no (eBillett/DX)" above).
+  - **Out-of-scope** — everything else.
+  Only seat-check the Filmgrail, ODEON, and ebillett.no groups in Step 3,
+  each with its own script pair; this classification is what keeps any
+  checkout script from ever being pointed at an unsupported cinema.
+- Keep the out-of-scope list around (don't discard it) — Step 4 always
+  mentions these, with their `ticketSaleUrl` as a manual-check link,
+  whether or not any in-scope candidate matched. That applies to every
+  out-of-scope cinema equally, including Bygdekinoen showings, which never
+  even reach Step 3 (see "Known checkout platforms" above for why) — the
+  user can still follow the link and check/book manually. Only skip Step 3
+  entirely (no seat-checking at all) when there are **no in-scope
+  candidates at all**, i.e. the film is only playing at out-of-scope
+  cinemas.
 
 ## Step 3 — Seat-check every candidate
 
-For **each** candidate showtime (all of them — this is deliberately
-thorough, not just a top-N subset), do the following using the
-`claude-in-chrome` tools. Load them first if not already loaded:
-`ToolSearch("select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__javascript_tool,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp,mcp__claude-in-chrome__read_page")`.
+For **each** Filmgrail, ODEON, or ebillett.no candidate (all of them — this
+is deliberately thorough, not just a top-N subset), run the script pair
+for that candidate's platform.
 
-Get a tab via `tabs_context_mcp` (create one if needed), then for each
-candidate:
+**Filmgrail candidates:**
 
-1. **Navigate** to the candidate's `ticketSaleUrl`.
-2. **Patch `window.fetch`** via `javascript_tool` to capture the seatmap
-   response body before it's needed (this must run on the fresh page,
-   before the click in step 4 below fires the request):
+```bash
+python3 scripts/filmgrail_checkout.py "<ticketSaleUrl>" --count <N>
+```
 
-   ```js
-   window.__seatmapCapture = null;
-   const __origFetch = window.fetch;
-   window.fetch = async function(...args) {
-     const res = await __origFetch.apply(this, args);
-     const url = typeof args[0] === 'string' ? args[0] : args[0].url;
-     if (url.includes('checkout/seatmap')) {
-       window.__seatmapCapture = await res.clone().text();
-     }
-     return res;
-   };
-   'patched';
-   ```
+This drives the checkout API directly over HTTP (no browser needed — see
+`scripts/filmgrail_checkout.py`'s module docstring and the design spec's
+"Seat-map flow" section for how this was reverse-engineered and verified
+live). It prints one JSON object to stdout and always attempts to cancel
+the transaction it opens, even on error — never leaves one dangling:
 
-3. **Select N adult ("Voksen") tickets**: the ticket-category "+" buttons
-   have no accessible labels, but "Voksen" is consistently the first
-   category listed on this page. Call `read_page` with
-   `filter: "interactive"` — the first plain `button [ref_N]` that appears
-   immediately after the `button "Søke"` entry is the "Voksen" row's `+`
-   control. Click that same ref N times (once per ticket), taking a
-   screenshot after each click to confirm the counter actually incremented.
-   Ref-based clicking on this control has been observed to work only about
-   half the time — if a click doesn't visibly move the counter, don't retry
-   the ref blindly; fall back to a direct coordinate click on the visible
-   "+" button instead. Do not trust raw screenshot pixel coordinates for
-   that fallback click without first checking `window.innerWidth` /
-   `window.innerHeight` via `javascript_tool`: the screenshot frame and the
-   real viewport can use different pixel scales, which shifts where a
-   coordinate click actually lands.
-4. **Click "Neste"**. Wait ~2 seconds. This creates a checkout transaction
-   and fires the `checkout/seatmap` request the patch above captures (the
-   modal also renders visually — that's fine, just not what we're reading).
-5. **Extract seat data** from the captured response by running this exact
-   JavaScript via `javascript_tool` (see the design spec's "Extraction"
-   section for how this was derived and verified against a real seatmap):
+```json
+{"status": "ok"|"error", "seats": [...] | null, "error": "..."|null,
+ "cancelStatus": "cancelled"|"failed"|"not_created"}
+```
 
-   ```js
-   function extractSeatmap(responseText) {
-     const body = JSON.parse(responseText);
-     const html = body.html;
-     const anchor = html.indexOf('%22state%22');
-     if (anchor === -1) throw new Error('seat state marker not found in seatmap response');
-     let i = anchor, depth = 0;
-     while (i > 0) {
-       if (html.slice(i, i + 3) === '%7D') depth++;
-       if (html.slice(i, i + 3) === '%7B') { if (depth === 0) break; depth--; }
-       i--;
-     }
-     let arrStart = i;
-     while (arrStart > 0 && html.slice(arrStart - 3, arrStart) !== '%5B') arrStart--;
-     arrStart -= 3;
-     let j = arrStart, bracketDepth = 0;
-     while (j < html.length) {
-       if (html.slice(j, j + 3) === '%5B') bracketDepth++;
-       if (html.slice(j, j + 3) === '%5D') { bracketDepth--; if (bracketDepth === 0) { j += 3; break; } }
-       j++;
-     }
-     return JSON.parse(decodeURIComponent(html.slice(arrStart, j)));
-   }
-   window.__seats = extractSeatmap(window.__seatmapCapture).map(s => (
-     {row: s.row, column: s.column, state: s.state, type: s.type, rowSymbol: s.rowSymbol, columnSymbol: s.columnSymbol}
-   ));
-   JSON.stringify({count: window.__seats.length, length: JSON.stringify(window.__seats).length});
-   ```
+1. Run the command above and parse its stdout JSON.
+2. If `status` is `"error"`: this is a genuine failure (network issue,
+   page shape changed, ticket category unavailable), not "sold out" — the
+   API doesn't reject `setTickets` for a fully-booked room, it just returns
+   zero available seats at the seatmap step, which the matcher below
+   naturally reports as no match. Skip this candidate but don't silently
+   swallow the error — note it for the final report.
+3. If `cancelStatus` is `"failed"`, **do not** silently move on — flag this
+   explicitly for the final report (time, room, and the `error` field),
+   the same as a dangling transaction would warrant. `"not_created"` is
+   fine and expected whenever `status` is `"error"` at the `setTickets`
+   stage (no transaction ever opened, so there was nothing to cancel).
+4. Continue with the shared matcher step below.
 
-   This drops fields `zone_match.py` doesn't use (`id`, `width`, `height`,
-   `coordX`, `coordY`, `seatCode`) to keep the payload as small as possible,
-   but keeps `columnSymbol` (one extra field per seat, cheap) alongside
-   `rowSymbol` so Step 4 can report human-readable matched seat labels,
-   and reports the reduced array's length in characters rather than dumping
-   it — **do not** try to print the full JSON in one shot. The
-   `javascript_tool`'s text result is truncated (observed consistently
-   around 900–1000 characters, with a literal `[TRUNCATED]` marker appended)
-   and every real seatmap tried during this skill's validation (29 and 59
-   seats) exceeded that, silently losing data if fetched whole. Instead,
-   pull it out in safe chunks and concatenate:
+**ODEON candidates:**
 
-   ```js
-   JSON.stringify(window.__seats).slice(<start>, <start + 800>)
-   ```
+```bash
+python3 scripts/odeon_checkout.py "<ticketSaleUrl>"
+```
 
-   Starting at `0` and incrementing `<start>` by `800` each call until you
-   reach `length` from the previous step (the last chunk will be shorter).
-   Concatenate the chunks in order with the `Write` tool as you save to
-   `<scratchpad>/seats-<showtime-id>.json`, then verify the file is valid
-   JSON with the expected element `count` before running the matcher — a
-   parse error or a mismatched count means a chunk boundary was fumbled;
-   redo the affected chunk rather than guessing at seat data. If
-   `window.__seatmapCapture` was still `null` when this step ran, the patch
-   in step 2 didn't catch the request (e.g. it fired before the patch was
-   installed) — re-run this candidate from step 1, but **first perform the
-   cleanup step** (step 7 below: close the modal, confirm abandonment by
-   clicking "Ja") exactly as you would for a normal completed check, since
-   the "Neste" click in step 4 already created a server-side transaction
-   even though extraction failed. Jumping straight back to step 1 would
-   abandon that transaction without ever cancelling it.
+This reads the seatmap directly from ODEON's Cinema API backend (no
+`--count` — see "ODEON (Cinema API)" above). Purely read-only: no
+transaction or hold is ever opened, so there is no cancel step and no
+`cancelStatus` field at all:
 
-6. **Run the matcher**:
+```json
+{"status": "ok"|"error", "seats": [...] | null, "error": "..."|null}
+```
 
-   ```bash
-   python3 scripts/zone_match.py --count <N> \
-     [--zone-row front|middle|back] [--zone-col left|center|right] \
-     < <scratchpad>/seats-<showtime-id>.json
-   ```
+1. Run the command above and parse its stdout JSON.
+2. If `status` is `"error"`, note it for the final report and skip this
+   candidate — no cleanup is needed (nothing was ever opened).
+3. Continue with the shared matcher step below.
 
-   Record whether `matched` is `true` for this showtime.
+**ebillett.no candidates:**
 
-7. **Always clean up**, regardless of whether it matched or step 5/6 errored:
-   take a screenshot of the current tab (you need one anyway to sanity-check
-   the seatmap), locate the small "X" close icon at the top-right corner of
-   the modal box itself (not the browser viewport corner — the modal is
-   centered and its top-right moves with its size), and click it at that
-   observed position. A confirmation dialog titled "Avslutt kjøpet?" then
-   appears asking "Er du sikker på at du vil avslutte kjøpet?" with two
-   buttons, "Ja" and "Avbryt" — take another screenshot and click "Ja" to
-   confirm abandoning the transaction (this is what releases it
-   server-side; "Avbryt" would cancel the *close*, i.e. keep the
-   transaction open — do not click it here). Do not skip this step on
-   error — if extraction or matching failed, still perform this cleanup
-   before moving to the next candidate. If this cleanup sequence itself
-   fails, or you cannot confirm the transaction was actually released (e.g.
-   the modal doesn't close, "Ja" has no visible effect, or a fresh reload of
-   the ticketSaleUrl still shows lingering "Dine seter" state), **do not**
-   silently move on — report this explicitly to the user as a flagged issue
-   for that specific showtime (time, room, and what was observed) alongside
-   the final results.
-8. **Pause a few seconds** before moving to the next candidate showtime —
-   this is a real production checkout system, not a read-only API.
+```bash
+python3 scripts/ebillett_checkout.py "<ticketSaleUrl>" --count <N>
+```
 
-If a candidate's ticket-category page shows the room is already sold out
-before you can even reach the seatmap (e.g. the "+" control for Voksen is
-disabled or an error appears), record it as sold out and move on rather
-than treating it as a failure.
+This drives the real ebillett.no checkout flow directly over HTTP (no
+browser — see "ebillett.no (eBillett/DX)" above and
+`scripts/ebillett_checkout.py`'s module docstring for exactly how). It
+always attempts a cancel, but unlike Filmgrail's, that cancel is **not**
+confirmed to actually release the hold immediately (see above) — the real
+safety net is ebillett.no's own ~1-minute auto-expiry:
+
+```json
+{"status": "ok"|"error", "seats": [...] | null, "error": "..."|null,
+ "cancelStatus": "attempted"|"failed"|"not_created"}
+```
+
+1. Run the command above and parse its stdout JSON.
+2. If `status` is `"error"`, note it for the final report and skip this
+   candidate.
+3. If `cancelStatus` is `"failed"`, flag it for the final report same as
+   Filmgrail's — a genuine failure to even *send* the cancel request is
+   worth surfacing, even though `"attempted"` itself isn't a strong
+   guarantee either. `"not_created"` is fine and expected whenever
+   `status` is `"error"` before a reservation existed.
+4. Continue with the shared matcher step below.
+
+**Shared final step, any platform:** if `status` is `"ok"`, pipe `seats`
+into that platform's own matcher — `filmgrail_zone_match.py` for Filmgrail
+candidates, `odeon_zone_match.py` for ODEON candidates, `ebillett_zone_match.py`
+for ebillett.no candidates (identical CLI shape across all three):
+
+```bash
+python3 scripts/filmgrail_zone_match.py --count <N> \
+  [--zone-row front|middle|back] [--zone-col left|center|right] \
+  <<< '<seats JSON array>'
+```
+
+Record whether `matched` is `true` for this showtime. Then **pause a few
+seconds** before moving to the next candidate — Filmgrail's and
+ebillett.no's are both real production checkout systems (not read-only),
+so never fire candidates back-to-back; ODEON's read-only check doesn't
+strictly need the same pause for correctness, but keep it anyway as a
+default courtesy to someone else's production API.
 
 ## Step 4 — Report results
 
 Present a ranked list (by `showStart`, ascending) of every showtime that
 matched, each with: time, room (`screenName`), cinema (`theaterName`),
 `ticketSaleUrl` for the user to complete booking themselves, and the actual
-matched seat labels — build these from `zone_match.py`'s `matches[].row`
+matched seat labels — build these from the matcher's `matches[].row`
 entry's `rowSymbol` plus each matched seat's `columnSymbol` (e.g. "Row 5,
 seats 10-12"). Mention the total checked vs. matched count for context (e.g.
 "6 showings today, 2 have room for 3 in the back"). If none matched, say so
 plainly and mention which showtimes exist today regardless, in case the user
 wants to relax their zone preference. Also surface any flagged
-cleanup-failure issues from Step 3 alongside the results.
+cleanup-failure issues from Step 3 alongside the results (Filmgrail's or
+ebillett.no's `cancelStatus: "failed"` — ODEON has no cleanup step to
+fail). Don't describe an ebillett.no `cancelStatus: "attempted"` as
+"cancelled" — it isn't confirmed, unlike Filmgrail's.
+
+If Step 2 found any out-of-scope candidates for this film (any cinema
+seat-checking doesn't cover, Bygdekinoen included), always mention them
+too, each with its `ticketSaleUrl` as a manual-check link, so the user
+knows those options exist even though this skill can't check their seats:
+- If there were **no** in-scope matches at all, lead with this — it's the
+  whole answer, not a footnote, and matters more than a bare "no matches."
+- If there **were** in-scope matches, add it after the ranked list as a
+  secondary "also playing at (not seat-checkable)" note rather than the
+  headline.
 
 **Never** proceed to actually purchasing tickets or entering payment
 details — this skill's job ends at reporting viable showtimes.

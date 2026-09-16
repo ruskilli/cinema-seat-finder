@@ -1,5 +1,5 @@
 import unittest
-from zone_match import zone_bounds, row_zone, col_zone, find_contiguous_run, find_match, standard_seats
+from odeon_zone_match import zone_bounds, row_zone, col_zone, find_contiguous_run, find_match, standard_seats
 
 
 def seat(row, column, state='available', seat_type=''):
@@ -8,19 +8,18 @@ def seat(row, column, state='available', seat_type=''):
 
 class TestStandardSeats(unittest.TestCase):
     def test_excludes_wheelchair_seats(self):
-        seats = [seat(0, 0), seat(0, 1), seat(0, 2, seat_type='WC')]
+        seats = [seat(0, 0), seat(0, 1), seat(0, 2, seat_type='HCP')]
         result = standard_seats(seats)
         self.assertEqual(len(result), 2)
         self.assertEqual({s['column'] for s in result}, {0, 1})
 
     def test_majority_type_is_treated_as_standard_even_when_nonempty(self):
-        # some rooms (e.g. D-BOX) label their standard seats with a
-        # room-specific type string instead of "" - the majority type in
-        # the room should be treated as standard, not hardcoded to ''
-        seats = [seat(0, c, seat_type='test4') for c in range(3)] + [seat(0, 10, seat_type='WC')]
+        # ODEON's standard type string is "REGULAR", not "" - the majority
+        # type in the room should be treated as standard either way
+        seats = [seat(0, c, seat_type='REGULAR') for c in range(3)] + [seat(0, 10, seat_type='HCP')]
         result = standard_seats(seats)
         self.assertEqual(len(result), 3)
-        self.assertTrue(all(s['type'] == 'test4' for s in result))
+        self.assertTrue(all(s['type'] == 'REGULAR' for s in result))
 
 
 class TestZoneBounds(unittest.TestCase):
@@ -87,14 +86,14 @@ class TestFindMatch(unittest.TestCase):
         self.assertTrue(result_front['matched'])
 
     def test_excludes_wheelchair_seats_from_matching(self):
-        seats = [seat(0, c) for c in range(3)] + [seat(0, 10, seat_type='WC')]
+        seats = [seat(0, c) for c in range(3)] + [seat(0, 10, seat_type='HCP')]
         result = find_match(seats, n=3, zone_row=None)
         self.assertTrue(result['matched'])
         matched_cols = {s['column'] for m in result['matches'] for s in m['seats']}
         self.assertNotIn(10, matched_cols)
 
     def test_find_match_works_when_majority_type_is_nonempty(self):
-        seats = [seat(0, c, seat_type='test4') for c in range(4)] + [seat(0, 10, seat_type='WC')]
+        seats = [seat(0, c, seat_type='REGULAR') for c in range(4)] + [seat(0, 10, seat_type='HCP')]
         result = find_match(seats, n=3, zone_row=None)
         self.assertTrue(result['matched'])
 
