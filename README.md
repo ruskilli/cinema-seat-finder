@@ -6,11 +6,11 @@ A Claude Code skill that lists today's showtimes at *any* Norwegian cinema
 — nationwide, or narrowed to a town you name — and, for a given film, finds
 which showtimes at Trondheim Kino, Steinkjer kino, Kimen kino (Stjørdal),
 Haugesund kino, Caroline kino (Kristiansund), Aurora Kino (Tromsø, Narvik,
-Alta, Kirkenes, Lakselv), ODEON Kino (any city), or any ebillett.no venue
-(~65 mostly small independent theaters nationwide) actually have room for a
-group together in their preferred part of the room — instead of manually
-clicking through film → time → seat count → seatmap for every candidate
-showing.
+Alta, Kirkenes, Lakselv), ODEON Kino (any city), any ebillett.no venue
+(~65 mostly small independent theaters nationwide), or any NFkino venue
+actually have room for a group together in their preferred part of the
+room — instead of manually clicking through film → time → seat count →
+seatmap for every candidate showing.
 
 Ask something like:
 
@@ -36,11 +36,11 @@ or about a film itself, no showtimes involved:
 > how long is Fjord, and what's the age rating?
 
 Listing, location lookups, and movie info cover every Norwegian cinema (and
-every film) Filmweb knows about; seat-finding only works for the three
+every film) Filmweb knows about; seat-finding only works for the four
 platforms behind the chains named above (ten Filmgrail cinemas, any ODEON
-city, or any ebillett.no venue) — see Scope below for why, and the skill
-says so plainly if a film you ask about is only playing somewhere
-seat-checking isn't supported.
+city, any ebillett.no venue, or any NFkino venue) — see Scope below for
+why, and the skill says so plainly if a film you ask about is only playing
+somewhere seat-checking isn't supported.
 
 ## See it in action
 
@@ -100,8 +100,8 @@ Ask something like *"what's playing tonight"* or *"what movies are on today
 in Bergen"*. Claude lists every film showing today with its showtimes and a
 booking link, across every cinema Filmweb knows about — nationwide by
 default, or just the town you named — including cinemas seat-checking
-doesn't cover (Bygdekinoen, NFKino, ODEON's non-seat-checkable siblings,
-and so on): you still get the link to check/book those yourself. No
+doesn't cover (Bygdekinoen, ODEON's non-seat-checkable siblings, and so
+on): you still get the link to check/book those yourself. No
 seat-checking is done for this.
 
 **Location lookups — asking about towns/cinemas, not showtimes:**
@@ -131,7 +131,8 @@ Include in your request:
 - **Date** (optional) — defaults to today.
 - **Town** (optional) — narrows the search; without one, Claude checks
   nationwide but only ever seat-checks the supported cinemas (the ten
-  Filmgrail ones, any ODEON city, or any ebillett.no venue).
+  Filmgrail ones, any ODEON city, any ebillett.no venue, or any NFkino
+  venue).
 
 Claude will check every showtime for that film today (not just the first
 one that works) and report back a ranked list of the ones with room for
@@ -174,8 +175,9 @@ can read a file and run shell commands can follow the same steps.
 - Point it at `.claude/skills/cinema-seat-finder/SKILL.md` as its
   instructions and let it drive `scripts/discover_shows.py`,
   `scripts/filmgrail_checkout.py` + `scripts/filmgrail_zone_match.py`,
-  `scripts/odeon_checkout.py` + `scripts/odeon_zone_match.py`, and
-  `scripts/ebillett_checkout.py` + `scripts/ebillett_zone_match.py` per the
+  `scripts/odeon_checkout.py` + `scripts/odeon_zone_match.py`,
+  `scripts/ebillett_checkout.py` + `scripts/ebillett_zone_match.py`, and
+  `scripts/nfkino_checkout.py` + `scripts/nfkino_zone_match.py` per the
   steps there — the scripts are plain Python 3 with no Claude Code
   dependency.
 
@@ -186,15 +188,16 @@ queries Filmweb directly, which aggregates every Norwegian cinema
 regardless of checkout vendor, so these aren't limited to any particular
 chain.
 
-**Seat-finding is limited to three checkout platforms.** Filmgrail/Mars
+**Seat-finding is limited to four checkout platforms.** Filmgrail/Mars
 covers ten cinemas, all confirmed live end-to-end (real transaction, real
 seatmap, real zone match, clean cancel) to share the exact same checkout
 API *and* seatmap shape: Trondheim Kino, Steinkjer kino, Kimen kino
 (Stjørdal), Haugesund kino, Caroline kino (Kristiansund), and Aurora Kino's
 Tromsø/Narvik/Alta/Kirkenes/Lakselv locations. ODEON's Cinema API backend
-covers any ODEON city, and the ebillett.no/DX platform covers any
-ebillett.no venue (see below for both). Today's date only, unless another
-date is given explicitly.
+covers any ODEON city, the ebillett.no/DX platform covers any ebillett.no
+venue, and NFkino's Drupal+Vista platform covers any NFkino venue (see
+below for all three). Today's date only, unless another date is given
+explicitly.
 
 `scripts/filmgrail_checkout.py` itself is not tied to any one cinema — it
 derives the checkout API host and standard ticket category from whichever
@@ -209,10 +212,13 @@ structure though, so `filmgrail_checkout.py` derives a synthetic
 `row`/`column` from those instead of the raw coordinates — Bergen kino is
 fully supported now too. See
 `.claude/skills/cinema-seat-finder/SKILL.md`'s "Filmgrail/Mars cinemas"
-section for the full picture, including chains confirmed to be on a
-*different* checkout platform entirely (NFKino, Bygdekinoen — ebillett.no
-is also a different vendor, but unlike those two it's its own supported
-platform, covered below).
+section for the full picture, including Bygdekinoen, confirmed to be on a
+*different* checkout platform entirely and out of scope for a stronger
+reason than that (its screenings have unnumbered, unreserved seating, so
+there's no seatmap to check at all). NFKino and ebillett.no were also
+found on different vendors during this survey, but unlike Bygdekinoen,
+both turned out to be their own separately supported platforms — covered
+below.
 
 **ODEON** turned out to be its own case, covered by `scripts/odeon_checkout.py`
 and `scripts/odeon_zone_match.py`: ODEON's own site (`www.odeonkino.no`) is
@@ -254,6 +260,31 @@ different venues (Rana kino and Stryn kino). See
 `.claude/skills/cinema-seat-finder/SKILL.md`'s "ebillett.no (eBillett/DX)"
 section for the full trail.
 
+**NFkino (Drupal + Vista)** covers NFkino's independent cinemas (Arendal,
+Farsund, Drammen, Kristiansand, Asker, Askim, Halden, Horten, Hønefoss,
+Tønsberg, Oslo, Sarpsborg, Verdal, Bergen/Lagunen, and more), via
+`scripts/nfkino_checkout.py` and `scripts/nfkino_zone_match.py`. Like
+ebillett.no, it has no bot protection at all. Opening a `ticketSaleUrl`
+sets a session cookie and redirects to an order page with its `orderUuid`
+embedded in the page's own `drupalSettings` JSON; POSTing
+`{"types": [{"id": <ticketTypeUuid>, "quantity": N}]}` to that order's
+`add_tickets` endpoint is what actually reserves seats, returning a
+structured JSON seatmap (not HTML) with every seat's position plus which
+seats are occupied room-wide and which were just assigned to this order.
+One correctness wrinkle worth calling out: the "occupied room-wide" list
+includes the caller's own just-reserved seats, not just other people's —
+`nfkino_checkout.py` corrects for that the same way `ebillett_checkout.py`
+does for its state-"2" seats. Cleanup is honest here too: the site's own
+`abandon` endpoint reliably returns success, but live testing couldn't
+fully confirm every held seat shows as free again afterward, so the real
+safety net is NFkino's own ~10-minute order countdown, and `cancelStatus`
+says `"attempted"`, never `"cancelled"`. Confirmed live end-to-end for
+Horten kino; the same domain-based reasoning is expected to extend to
+NFkino's other venues since they share the identical platform, but only
+Horten has actually been verified so far. See
+`.claude/skills/cinema-seat-finder/SKILL.md`'s "NFkino (Drupal + Vista)"
+section for the full trail.
+
 ## Public APIs only
 
 Every script here only ever talks to endpoints that answer a plain,
@@ -267,11 +298,12 @@ control. Concretely:
   signal this project respects. `odeon_checkout.py` gets everything it
   needs from `services.cinema-api.com` instead, a separate backend that
   genuinely has no such protection.
-- **`checkout.ebillett.no` has no bot protection to respect or bypass.**
-  Confirmed by extensive live testing during development — every endpoint
-  `ebillett_checkout.py` uses answers a plain unauthenticated request the
-  same way it would a browser; the only real obstacle was learning the
-  correct POST payload shape, not any defensive control.
+- **`checkout.ebillett.no` and `nfkino.no` have no bot protection to
+  respect or bypass, either.** Confirmed by extensive live testing during
+  development — every endpoint `ebillett_checkout.py` and
+  `nfkino_checkout.py` use answers a plain unauthenticated request the
+  same way it would a browser; the only real obstacle for either was
+  learning the correct payload shape, not any defensive control.
 - **A non-default User-Agent header is not evasion.** `filmgrail_checkout.py`
   and `odeon_checkout.py` send `User-Agent: Mozilla/5.0` because some of
   these APIs reject the bare default string a scripting library sends
@@ -283,12 +315,14 @@ control. Concretely:
   certainty.** `filmgrail_checkout.py` always cancels the transaction it
   opens, and that cancel is confirmed effective (see its docstring).
   `odeon_checkout.py` never opens one in the first place — its seat data is
-  a read-only GET, no side effect at all. `ebillett_checkout.py` sends the
-  same best-effort `action=cancel` POST the real app's own close button
-  sends, but — unlike Filmgrail — that POST is not confirmed to actually
-  release the held seats; the real safety net is ebillett.no's own
-  ~1-minute inactivity auto-expiry, and the script's `cancelStatus` field
-  says `"attempted"`, not `"cancelled"`, to keep that distinction honest.
+  a read-only GET, no side effect at all. `ebillett_checkout.py` and
+  `nfkino_checkout.py` each send the same best-effort cleanup request the
+  real site itself sends (`action=cancel` and `/abandon` respectively),
+  but — unlike Filmgrail — neither is confirmed to actually release the
+  held seats; the real safety net in both cases is the platform's own
+  short-lived auto-expiry (~1 minute for ebillett.no, ~10 minutes for
+  NFkino), and both scripts' `cancelStatus` field says `"attempted"`, not
+  `"cancelled"`, to keep that distinction honest.
 
 If a future chain's data isn't reachable this way — genuine auth required,
 or an active challenge on the data itself rather than just the storefront
@@ -312,15 +346,18 @@ or an active challenge on the data itself rather than just the storefront
    For an ebillett.no candidate, `scripts/ebillett_checkout.py` drives that
    platform's own setup → POST → `302` redirect → seatmap flow, opening a
    real reservation and sending a best-effort (not confirmed-effective)
-   cancel — see Scope above. `SKILL.md` classifies each candidate
-   (`firmName` for Filmgrail, `ticketSaleUrl` domain for ODEON and
-   ebillett.no) and calls the matching script — see Scope above for why
-   each platform needs different logic.
+   cancel. For an NFkino candidate, `scripts/nfkino_checkout.py` drives
+   that platform's order-creation → add_tickets → structured-seatmap flow,
+   with the same kind of best-effort cleanup — see Scope above for both.
+   `SKILL.md` classifies each candidate (`firmName` for Filmgrail,
+   `ticketSaleUrl` domain for ODEON, ebillett.no, and NFkino) and calls the
+   matching script — see Scope above for why each platform needs different
+   logic.
 3. **Zone matching** — `scripts/filmgrail_zone_match.py`,
-   `scripts/odeon_zone_match.py`, or `scripts/ebillett_zone_match.py`
-   (matched to the candidate's platform) scans the extracted seatmap for N
-   contiguous available seats in the requested front/middle/back and
-   left/center/right zone.
+   `scripts/odeon_zone_match.py`, `scripts/ebillett_zone_match.py`, or
+   `scripts/nfkino_zone_match.py` (matched to the candidate's platform)
+   scans the extracted seatmap for N contiguous available seats in the
+   requested front/middle/back and left/center/right zone.
 
 All of this is orchestrated by
 `.claude/skills/cinema-seat-finder/SKILL.md`, which Claude follows when the
@@ -374,14 +411,23 @@ python3 scripts/ebillett_checkout.py "https://checkout.ebillett.no/246/events/77
 # Find N contiguous available seats in a zone, from ebillett_checkout.py's
 # `seats` field piped in on stdin
 python3 scripts/ebillett_zone_match.py --count 3 --zone-row back --zone-col center < seats.json
+
+# Check seat availability for one NFkino showtime (opens a real order and
+# sends a best-effort cleanup - see Scope above for why that isn't
+# guaranteed, same caveat as ebillett_checkout.py's)
+python3 scripts/nfkino_checkout.py "https://nfkino.no/screening/53126442-33d8-4b30-a736-b80d35b4049a/6c3775a8-39c2-488b-8fcd-c1d2d6f1ba25" --count 3
+
+# Find N contiguous available seats in a zone, from nfkino_checkout.py's
+# `seats` field piped in on stdin
+python3 scripts/nfkino_zone_match.py --count 3 --zone-row back --zone-col center < seats.json
 ```
 
 ## Tests
 
 ```bash
 cd scripts
-python3 -m unittest test_discover_shows test_filmgrail_zone_match test_filmgrail_checkout test_odeon_zone_match test_odeon_checkout test_ebillett_checkout test_ebillett_zone_match
+python3 -m unittest test_discover_shows test_filmgrail_zone_match test_filmgrail_checkout test_odeon_zone_match test_odeon_checkout test_ebillett_checkout test_ebillett_zone_match test_nfkino_checkout test_nfkino_zone_match
 ```
 
-All seven test modules run entirely offline against fake/canned responses —
+All nine test modules run entirely offline against fake/canned responses —
 no network access or real checkout transactions/API calls are involved.
