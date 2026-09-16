@@ -40,6 +40,46 @@ city, or any ebillett.no venue) — see Scope below for why, and the skill
 says so plainly if a film you ask about is only playing somewhere
 seat-checking isn't supported.
 
+## See it in action
+
+A real conversation, start to finish — location lookup, listing, movie
+info, then seat-finding:
+
+<table>
+<tr>
+<td width="50%">
+
+**"Are there any cinemas nearby?"**
+
+![Location lookup](docs/assets/demo-1-location.png)
+
+</td>
+<td width="50%">
+
+**"What's on tomorrow?"**
+
+![Listing showtimes](docs/assets/demo-2-listing.png)
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**"Tell me more about Harila"**
+
+![Movie info](docs/assets/demo-3-movie-info.png)
+
+</td>
+<td width="50%">
+
+**"Room for 4, front and center?"**
+
+![Seat-finding](docs/assets/demo-4-seat-finding.png)
+
+</td>
+</tr>
+</table>
+
 ## How to use this skill
 
 Open Claude Code with this repo as (or inside) the working directory, so it
