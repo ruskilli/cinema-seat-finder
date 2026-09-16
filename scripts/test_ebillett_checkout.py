@@ -98,7 +98,7 @@ class TestSeatsFromSeatmap(unittest.TestCase):
     def test_decodes_row_column_state_from_compact_string(self):
         data = {
             'seatplan': [
-                {'row': 1, 'seats': '1,105,15,0:1,95,15,0:2,85,15,0'},
+                {'row': 1, 'seats': '1,105,15,0:1,95,15,0:4,85,15,0'},
                 {'row': None, 'seats': ''},
             ]
         }
@@ -109,8 +109,17 @@ class TestSeatsFromSeatmap(unittest.TestCase):
             {'row': 1, 'column': 3, 'state': 'booked', 'type': '', 'rowSymbol': '1', 'columnSymbol': '3'},
         ])
 
-    def test_only_state_1_counts_as_available(self):
-        # any non-"1" code (selected-by-us, sold, special seat types, ...) is
+    def test_state_2_counts_as_available_too(self):
+        # "2" means "held by this reservation" - i.e. exactly the seats
+        # check_seats() just reserved for the user, so they must count as
+        # available or the matcher can never see the seats it just proved
+        # exist
+        data = {'seatplan': [{'row': 1, 'seats': '2,0,0,0:1,0,0,0'}]}
+        seats = seats_from_seatmap(data)
+        self.assertEqual([s['state'] for s in seats], ['available', 'available'])
+
+    def test_other_codes_count_as_booked(self):
+        # any other non-"1"/"2" code (sold, special seat types, ...) is
         # conservatively treated as not available for a new booking
         data = {'seatplan': [{'row': 1, 'seats': '4,0,0,0:10,0,0,0:1,0,0,0'}]}
         seats = seats_from_seatmap(data)

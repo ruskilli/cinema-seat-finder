@@ -2,7 +2,7 @@ import datetime
 import json
 import unittest
 from discover_shows import (
-    build_payload, fetch_shows, filter_past_shows, get_cinemas, get_movie, search_locations, search_movies,
+    build_payload, fetch_shows, filter_past_shows, get_cinemas, get_movie, oslo_now, search_locations, search_movies,
 )
 
 
@@ -86,6 +86,23 @@ class TestFilterPastShows(unittest.TestCase):
 
     def test_empty_input_returns_empty_list(self):
         self.assertEqual(filter_past_shows([], datetime.datetime(2026, 9, 16, 13, 0, 0)), [])
+
+
+class TestOsloNow(unittest.TestCase):
+    def test_converts_utc_to_naive_oslo_local_time_summer(self):
+        # 2026-09-16 is CEST (UTC+2) in Oslo
+        utc_now = datetime.datetime(2026, 9, 16, 11, 0, 0, tzinfo=datetime.timezone.utc)
+        self.assertEqual(oslo_now(utc_now), datetime.datetime(2026, 9, 16, 13, 0, 0))
+
+    def test_converts_utc_to_naive_oslo_local_time_winter(self):
+        # mid-January is CET (UTC+1) in Oslo - this is the case that breaks
+        # if the host's own system timezone is used instead of Oslo's
+        utc_now = datetime.datetime(2026, 1, 15, 11, 0, 0, tzinfo=datetime.timezone.utc)
+        self.assertEqual(oslo_now(utc_now), datetime.datetime(2026, 1, 15, 12, 0, 0))
+
+    def test_result_is_naive_so_it_compares_directly_against_showstart(self):
+        utc_now = datetime.datetime(2026, 9, 16, 11, 0, 0, tzinfo=datetime.timezone.utc)
+        self.assertIsNone(oslo_now(utc_now).tzinfo)
 
 
 class TestSearchLocations(unittest.TestCase):

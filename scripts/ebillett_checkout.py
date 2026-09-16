@@ -45,10 +45,11 @@ colon-separated list of `state,x,y,z` seats, one per seat in that row, in
 left-to-right seat-number order (position in this list, 1-indexed, is the
 seat number - confirmed directly against a real reservation's
 "RAD 7, SETE 16-19" confirmation text, which matched positions 16-19
-exactly). `state` is a numeric code: "1" is free; every other value
-(confirmed: "2" for a seat this reservation currently holds, others for
-sold seats and special categories like sofa/companion sections) is treated
-uniformly as not available for a *new* booking here - deliberately
+exactly). `state` is a numeric code: "1" is free, and "2" (confirmed) is a
+seat this reservation currently holds - i.e. exactly the seats `count`
+just reserved for the caller, so both count as available. Every other
+code (sold seats, special categories like sofa/companion sections) is
+treated uniformly as not available for a *new* booking here - deliberately
 conservative rather than trying to fully reverse-engineer every code.
 
 Cleanup is honest, not Filmgrail-strength: resubmitting the same setup form
@@ -169,8 +170,9 @@ def seats_from_seatmap(data):
     colon-separated list of `state,x,y,z` seats in left-to-right seat-order
     (list position, 1-indexed, is the seat/column number - confirmed
     directly against a real reservation's on-screen "RAD n, SETE a-b"
-    confirmation text). Only state "1" (free) counts as available; every
-    other code - this reservation's own held seats, sold seats, and
+    confirmation text). States "1" (free) and "2" (held by this
+    reservation - i.e. exactly the seats check_seats() just reserved for
+    the caller) both count as available; every other code - sold seats and
     special categories like sofa/companion sections - is conservatively
     treated as booked (see module docstring)."""
     seats = []
@@ -184,7 +186,7 @@ def seats_from_seatmap(data):
             seats.append({
                 "row": row,
                 "column": column,
-                "state": "available" if state_code == "1" else "booked",
+                "state": "available" if state_code in ("1", "2") else "booked",
                 "type": "",
                 "rowSymbol": str(row),
                 "columnSymbol": str(column),

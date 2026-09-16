@@ -64,6 +64,7 @@ import argparse
 import datetime
 import json
 import urllib.request
+from zoneinfo import ZoneInfo
 
 GRAPHQL_ENDPOINT = "https://movieinfoqs.filmweb.no/graphql"
 
@@ -177,6 +178,17 @@ def filter_past_shows(shows, now):
     return [s for s in shows if datetime.datetime.fromisoformat(s['showStart']) > now]
 
 
+def oslo_now(utc_now=None):
+    """Current wall-clock time in Europe/Oslo, as a naive datetime -
+    directly comparable against Filmweb's showStart strings, which are
+    themselves naive Norway-local wall-clock times with no offset. Using
+    plain `datetime.datetime.now()` here would instead be the *host's own*
+    system timezone, which is wrong (and silently so) on anything not
+    itself running in Europe/Oslo - a UTC container/CI runner, say."""
+    utc_now = utc_now or datetime.datetime.now(datetime.timezone.utc)
+    return utc_now.astimezone(ZoneInfo("Europe/Oslo")).replace(tzinfo=None)
+
+
 def search_locations(search_text, endpoint=GRAPHQL_ENDPOINT, opener=None):
     """Resolve a (possibly partial or misspelled) Norwegian town name against
     Filmweb's own location index - e.g. "berg" -> ["Bergen", "Kongsberg",
@@ -256,7 +268,7 @@ def main():
         parser.error('--date is required unless --search-location, --list-cinemas, --search-movie, or --movie-id is given')
     shows = fetch_shows(args.location, args.date, args.movie_title)
     if args.exclude_past:
-        shows = filter_past_shows(shows, datetime.datetime.now())
+        shows = filter_past_shows(shows, oslo_now())
     print(json.dumps(shows))
 
 
