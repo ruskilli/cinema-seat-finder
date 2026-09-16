@@ -29,6 +29,18 @@ so plainly rather than silently returning nothing. Today's date only,
 unless the user explicitly gives another date. Never completes a purchase
 — it only reports which showtimes are viable and their booking links.
 
+**Talking to the user:** this whole document — script names, platform
+internals, JSON field names, HTTP mechanics — is orchestration detail for
+you, not something to narrate. Work through Steps 1-3 quietly; don't
+report each script you're about to run or each candidate you're checking
+as you go (a single short "checking today's showings..." is plenty, if
+you say anything at all before the final answer). The Step 4 report
+should read like a person who checked seats for you, not a systems log:
+plain language only — no script or field names (`cancelStatus`,
+`ticketSaleUrl`, `firmName`, "matcher", "seatmap JSON", etc.), no mention
+of which HTTP calls were made. Only go into the mechanics if the user
+explicitly asks how this works.
+
 ## Known checkout platforms (background)
 
 ### Filmgrail/Mars cinemas
@@ -495,11 +507,13 @@ entry's `rowSymbol` plus each matched seat's `columnSymbol` (e.g. "Row 5,
 seats 10-12"). Mention the total checked vs. matched count for context (e.g.
 "6 showings today, 2 have room for 3 in the back"). If none matched, say so
 plainly and mention which showtimes exist today regardless, in case the user
-wants to relax their zone preference. Also surface any flagged
-cleanup-failure issues from Step 3 alongside the results (Filmgrail's or
-ebillett.no's `cancelStatus: "failed"` — ODEON has no cleanup step to
-fail). Don't describe an ebillett.no `cancelStatus: "attempted"` as
-"cancelled" — it isn't confirmed, unlike Filmgrail's.
+wants to relax their zone preference. If Step 3 flagged a genuine
+cleanup-failure for a matched showtime, mention it as a plain, brief
+caveat next to that showtime — e.g. "heads up, the hold I placed to check
+this one may not have released instantly, but it expires on its own
+shortly" — never as a raw status value, and never for a Filmgrail
+showtime where cleanup is confirmed fine or an ODEON one (nothing was ever
+held there).
 
 If Step 2 found any out-of-scope candidates for this film (any cinema
 seat-checking doesn't cover, Bygdekinoen included), always mention them
