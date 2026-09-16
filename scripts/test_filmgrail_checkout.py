@@ -9,6 +9,7 @@ from filmgrail_checkout import (
     get_seatmap_html,
     get_tickets_categories_data,
     pick_standard_ticket,
+    reduce_seats,
     set_tickets,
 )
 
@@ -207,6 +208,74 @@ class TestExtractSeatmap(unittest.TestCase):
     def test_raises_when_state_marker_absent(self):
         with self.assertRaises(RuntimeError):
             extract_seatmap('no seat data here')
+
+
+class TestReduceSeats(unittest.TestCase):
+    def test_uses_the_existing_integer_row_and_column_when_present(self):
+        # Trondheim Kino's shape - already has a `column` field, so it
+        # should be used as-is rather than re-derived from the symbols.
+        seats = [
+            {'id': '0', 'row': 0, 'column': 3, 'state': 'available', 'type': '',
+             'rowSymbol': '1', 'columnSymbol': '4'},
+        ]
+        self.assertEqual(reduce_seats(seats), [
+            {'row': 0, 'column': 3, 'state': 'available', 'type': '',
+             'rowSymbol': '1', 'columnSymbol': '4'},
+        ])
+
+    def test_derives_row_and_column_from_symbols_when_no_column_field(self):
+        # Bergen kino's shape - pixel coordX/coordY instead of an integer
+        # column, but rowSymbol/columnSymbol already form a dense,
+        # gapless per-row sequence that's usable directly.
+        seats = [
+            {'id': '132844', 'row': '1', 'coordX': 64, 'coordY': 0,
+             'rowSymbol': '1', 'columnSymbol': '8', 'state': 'available', 'type': ''},
+            {'id': '132837', 'row': '1', 'coordX': 328, 'coordY': 0,
+             'rowSymbol': '1', 'columnSymbol': '1', 'state': 'available', 'type': ''},
+            {'id': '132859', 'row': '2', 'coordX': 84, 'coordY': 50,
+             'rowSymbol': '2', 'columnSymbol': '8', 'state': 'booked', 'type': ''},
+        ]
+        self.assertEqual(reduce_seats(seats), [
+            {'row': 0, 'column': 8, 'state': 'available', 'type': '',
+             'rowSymbol': '1', 'columnSymbol': '8'},
+            {'row': 0, 'column': 1, 'state': 'available', 'type': '',
+             'rowSymbol': '1', 'columnSymbol': '1'},
+            {'row': 1, 'column': 8, 'state': 'booked', 'type': '',
+             'rowSymbol': '2', 'columnSymbol': '8'},
+        ])
+
+    def test_drops_seats_with_a_non_numeric_column_symbol(self):
+        # Bergen kino's wheelchair seat has columnSymbol "R" - no sensible
+        # column index, so it's dropped rather than guessed at.
+        seats = [
+            {'id': '132837', 'row': '1', 'coordX': 328, 'coordY': 0,
+             'rowSymbol': '1', 'columnSymbol': '1', 'state': 'available', 'type': ''},
+            {'id': '133644', 'row': '4', 'coordX': 400, 'coordY': 150,
+             'rowSymbol': '4', 'columnSymbol': 'R', 'state': 'booked', 'type': 'WC'},
+        ]
+        result = reduce_seats(seats)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['columnSymbol'], '1')
+
+    def test_row_order_follows_first_appearance_not_numeric_sort(self):
+        # rows are grouped by first-appearance order in the raw array
+        # (which is already row-contiguous), not by parsing rowSymbol as
+        # a number - this should still work even if a room's rowSymbols
+        # aren't plain digits.
+        seats = [
+            {'id': '0', 'row': 'B', 'coordX': 0, 'coordY': 50,
+             'rowSymbol': 'B', 'columnSymbol': '1', 'state': 'available', 'type': ''},
+            {'id': '1', 'row': 'A', 'coordX': 0, 'coordY': 0,
+             'rowSymbol': 'A', 'columnSymbol': '1', 'state': 'available', 'type': ''},
+        ]
+        result = reduce_seats(seats)
+        self.assertEqual(result[0]['row'], 0)
+        self.assertEqual(result[0]['rowSymbol'], 'B')
+        self.assertEqual(result[1]['row'], 1)
+        self.assertEqual(result[1]['rowSymbol'], 'A')
+
+    def test_empty_input_returns_empty_list(self):
+        self.assertEqual(reduce_seats([]), [])
 
 
 class TestCheckSeats(unittest.TestCase):

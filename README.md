@@ -199,12 +199,16 @@ derives the checkout API host and standard ticket category from whichever
 showtime URL it's given (see that script's module docstring). A nationwide
 survey (`discover_shows.py --location ""` returns every Norwegian showtime
 in one call — 893 shows across 110 cinemas on the day this was run) turned
-up one cinema on the exact same checkout platform that's **not** in scope:
-Bergen kino, whose seatmap uses pixel coordinates instead of the
-`row`/`column` grid the other ten (and `filmgrail_zone_match.py`) expect — see
-`.claude/skills/cinema-seat-finder/SKILL.md`'s "Known Filmgrail/Mars
-cinemas" section for the full picture, including chains confirmed to be on
-a *different* checkout platform entirely (NFKino, Bygdekinoen — ebillett.no
+up one cinema on the exact same checkout platform whose seatmap shape
+looked different at first: Bergen kino reports pixel coordinates instead
+of the `row`/`column` grid the other cinemas use. Its `rowSymbol`/
+`columnSymbol` fields turned out to already carry the same clean adjacency
+structure though, so `filmgrail_checkout.py` derives a synthetic
+`row`/`column` from those instead of the raw coordinates — Bergen kino is
+fully supported now too. See
+`.claude/skills/cinema-seat-finder/SKILL.md`'s "Filmgrail/Mars cinemas"
+section for the full picture, including chains confirmed to be on a
+*different* checkout platform entirely (NFKino, Bygdekinoen — ebillett.no
 is also a different vendor, but unlike those two it's its own supported
 platform, covered below).
 

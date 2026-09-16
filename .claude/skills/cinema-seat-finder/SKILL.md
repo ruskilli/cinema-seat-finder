@@ -54,10 +54,9 @@ call instead of guessing town names), then a live but read-only page fetch
 per unique checkout domain checking for the embedded `TicketsCategories`
 block (no checkout transaction opened for that survey pass).
 
-**In scope, fully working** — each confirmed live 2026-09-16 end to end
-(real transaction, real seatmap, real `filmgrail_zone_match.py` match, clean cancel)
-and all sharing the same integer `row`/`column` seatmap grid as Trondheim
-Kino itself:
+**In scope, fully working** — each confirmed live end to end (real
+transaction, real seatmap, real `filmgrail_zone_match.py` match, clean
+cancel):
 
 | Cinema | Town(s) | Domain |
 |---|---|---|
@@ -71,18 +70,24 @@ Kino itself:
 | Alta kino | Alta | `alta.aurorakino.no` |
 | Kirkenes kino | Kirkenes | `kirkenes.aurorakino.no` |
 | Lakselv kino | Lakselv | `lakselv.aurorakino.no` |
-
-These ten `firmName` values are exactly what the allow-list in Step 1/Step
-2 below checks against.
-
-Confirmed on the same checkout API but **NOT in scope** — its seatmap uses
-pixel `coordX`/`coordY` coordinates instead of the grid above (no `column`
-field at all — see `filmgrail_checkout.py`'s module docstring), which
-`filmgrail_zone_match.py` doesn't understand:
-
-| Cinema | Town | Domain |
-|---|---|---|
+| Setermoen kino | Setermoen | `www.setermoenkino.no` |
 | Bergen kino | Bergen | `www.bergenkino.no` |
+
+These twelve `firmName` values are exactly what the allow-list in Step
+1/Step 2 below checks against. (Setermoen kino added 2026-09-17: found via
+a nationwide domain survey, not yet listed anywhere, and confirmed live
+the same way as the rest.)
+
+Most of these rooms share the same integer `row`/`column` seatmap grid.
+**Bergen kino is the one exception** (added 2026-09-17): its seatmap has
+no integer `column` field at all, only pixel `coordX`/`coordY` plus
+`rowSymbol`/`columnSymbol`. It turned out `rowSymbol`/`columnSymbol` alone
+already carry the same clean, gapless adjacency structure the matcher
+needs (confirmed live against two different Bergen kino rooms, 2026-09-17)
+— so `filmgrail_checkout.py`'s `reduce_seats` derives a synthetic
+`row`/`column` from those symbols for any room shaped like this, and
+everything downstream (`filmgrail_zone_match.py` included) works
+unchanged. See that function's docstring for exactly how.
 
 Confirmed **not** on this platform at all (different checkout vendor — do
 not attempt `filmgrail_checkout.py` against these):
@@ -102,11 +107,13 @@ were somehow moot.
 
 If a new candidate cinema turns up later (another `<town>.aurorakino.no`
 subdomain not yet checked, say), verify it the same way before adding it to
-the allow-list: a real `check_seats()` call, confirm `status: 'ok'` with a
-`row`/`column` (int) seatmap shape like the table above (not
-`coordX`/`coordY`), and confirm `filmgrail_zone_match.py` produces a sane match —
-don't add a cinema on domain-pattern-matching alone, since Bergen proves
-sharing the checkout API doesn't guarantee the same seatmap shape.
+the allow-list: a real `check_seats()` call, confirm `status: 'ok'` and a
+sane `filmgrail_zone_match.py` match — don't add a cinema on
+domain-pattern-matching alone. A seatmap shape different from Trondheim's
+integer grid isn't automatically a dead end any more (Bergen proved that,
+see above) — but it still needs a live check per new *shape* encountered,
+not just per cinema, since a future shape might not be `rowSymbol`/
+`columnSymbol`-friendly the way Bergen's was.
 
 ### ODEON (Cinema API)
 
@@ -245,7 +252,7 @@ python3 scripts/discover_shows.py --location "<resolved town>" --list-cinemas
 This lists the cinema *buildings* Filmweb knows about there (e.g.
 `[{"name": "Nova", "firmId": 12}, {"name": "Prinsen", "firmId": 12}]` for
 Trondheim). Report the building names plainly, and note whether that town
-is seat-finding-supported — one of the ten Filmgrail cinemas (cross-check
+is seat-finding-supported — one of the twelve Filmgrail cinemas (cross-check
 against the table above), any ODEON city, any ebillett.no venue, or
 listing-only. An empty array means no cinema found for that resolved
 town — say so.
@@ -369,11 +376,11 @@ seat-checking in Step 3.
 - Otherwise, you now have the full candidate list: each entry has
   `showStart`, `screenName`, `theaterName`, `firmName`, `ticketSaleUrl`.
 - Classify each candidate into exactly one of four groups:
-  - **Filmgrail** — `firmName` exactly one of the ten values listed under
+  - **Filmgrail** — `firmName` exactly one of the twelve values listed under
     "Filmgrail/Mars cinemas" above (`"Trondheim Kino"`, `"Steinkjer kino"`,
     `"Kimen kino"`, `"Haugesund kino"`, `"Caroline kino Kristiansund"`,
     `"Tromsø Kino"`, `"Narvik kino"`, `"Alta kino"`, `"Kirkenes kino"`,
-    `"Lakselv kino"`).
+    `"Lakselv kino"`, `"Setermoen kino"`, `"Bergen kino"`).
   - **ODEON** — `ticketSaleUrl` starts with `https://www.odeonkino.no/`
     (domain-based, not `firmName`-based — see "ODEON (Cinema API)" above
     for why).

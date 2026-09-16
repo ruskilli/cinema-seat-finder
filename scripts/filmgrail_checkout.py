@@ -44,13 +44,22 @@ However, the *seat record shape* Bergen's seatmap embeds is NOT the same as
 Trondheim's: every Bergen room sampled 2026-09-16 used pixel coordinates
 (`coordX`/`coordY`, `row` as a string, no `column` field at all) instead of
 Trondheim's integer grid (`row`/`column` as ints - see filmgrail_zone_match.py's
-module docstring). `reduce_seats` below assumes the Trondheim grid shape and
-raises `KeyError` on the pixel-coordinate shape - `check_seats` catches this
-and reports it as a normal `status: 'error'` (transaction still cancelled
-cleanly), so a Bergen showtime currently comes back as "couldn't check
-seats" rather than a real zone match. Supporting Bergen's seatmap fully
-would mean teaching filmgrail_zone_match.py to bucket/adjacency-match on pixel
-coordinates too - not yet done.
+module docstring).
+
+Confirmed live 2026-09-17 (Bergen kino/Konsertpaleet, 49-seat room): even
+though there's no integer `column` field, `rowSymbol`/`columnSymbol` alone
+already carry a clean, gapless per-row integer sequence (columnSymbol "1",
+"2", "3"... with no gaps, grouped by rowSymbol) - the exact same adjacency
+structure `filmgrail_zone_match.py` already expects from Trondheim's real
+`row`/`column` ints. So `reduce_seats` below does NOT need `coordX`/`coordY`
+at all: when a seat record has no `column` key, it derives a synthetic
+`row`/`column` pair straight from `rowSymbol` (grouped by first-appearance
+order in the raw array, which is already row-contiguous) and `columnSymbol`
+(cast straight to int). A seat whose `columnSymbol` isn't a plain digit
+string (Bergen's one wheelchair seat that day had `columnSymbol: "R"`) is
+dropped rather than guessed at - same treatment as any other non-standard
+seat category, and it was already a different `type` too, so it would've
+been filtered out downstream regardless.
 
 Not every Norwegian cinema is on this platform at all - `nfkino.no`,
 `aurorakino.no`, `odeonkino.no`, and `ebillett.no` are known to use
@@ -185,10 +194,36 @@ def extract_seatmap(html):
 
 
 def reduce_seats(seats):
-    """Drop fields filmgrail_zone_match.py doesn't use, keeping the payload small."""
-    return [{'row': s['row'], 'column': s['column'], 'state': s['state'],
-              'type': s['type'], 'rowSymbol': s['rowSymbol'], 'columnSymbol': s['columnSymbol']}
-            for s in seats]
+    """Drop fields filmgrail_zone_match.py doesn't use, keeping the payload small.
+
+    Most rooms (e.g. Trondheim Kino) already have integer `row`/`column`
+    fields - used as-is. Pixel-coordinate rooms (e.g. Bergen kino) have no
+    `column` field at all; for those, `row`/`column` are instead derived
+    from `rowSymbol`/`columnSymbol` (see module docstring for why that's a
+    safe substitute for `coordX`/`coordY`). A seat whose `columnSymbol`
+    isn't a plain digit string (e.g. a wheelchair spot labelled "R") is
+    dropped - there's no sensible column index for it, and it's a
+    different `type` anyway so it would've been filtered out downstream
+    regardless.
+    """
+    if seats and 'column' in seats[0]:
+        return [{'row': s['row'], 'column': s['column'], 'state': s['state'],
+                  'type': s['type'], 'rowSymbol': s['rowSymbol'], 'columnSymbol': s['columnSymbol']}
+                for s in seats]
+
+    row_order = {}
+    reduced = []
+    for s in seats:
+        col_sym = s['columnSymbol']
+        if not col_sym.isdigit():
+            continue
+        row_sym = s['rowSymbol']
+        if row_sym not in row_order:
+            row_order[row_sym] = len(row_order)
+        reduced.append({'row': row_order[row_sym], 'column': int(col_sym),
+                         'state': s['state'], 'type': s['type'],
+                         'rowSymbol': row_sym, 'columnSymbol': col_sym})
+    return reduced
 
 
 def check_seats(ticket_sale_url, count, opener=None):
