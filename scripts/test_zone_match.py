@@ -8,10 +8,10 @@ def seat(row, column, state='available', seat_type=''):
 
 class TestStandardSeats(unittest.TestCase):
     def test_excludes_wheelchair_seats(self):
-        seats = [seat(0, 0), seat(0, 1, seat_type='WC')]
+        seats = [seat(0, 0), seat(0, 1), seat(0, 2, seat_type='WC')]
         result = standard_seats(seats)
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]['column'], 0)
+        self.assertEqual(len(result), 2)
+        self.assertEqual({s['column'] for s in result}, {0, 1})
 
     def test_majority_type_is_treated_as_standard_even_when_nonempty(self):
         # some rooms (e.g. D-BOX) label their standard seats with a
