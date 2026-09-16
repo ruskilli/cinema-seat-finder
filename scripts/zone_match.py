@@ -46,9 +46,9 @@ def zone_bounds(seats):
 def row_zone(row, bounds):
     if bounds['row_third'] == 0:
         return 'middle'
-    if row <= bounds['min_row'] + bounds['row_third']:
+    if row < bounds['min_row'] + bounds['row_third']:
         return 'front'
-    if row >= bounds['max_row'] - bounds['row_third']:
+    if row >= bounds['max_row'] + 1 - bounds['row_third']:
         return 'back'
     return 'middle'
 
@@ -56,9 +56,9 @@ def row_zone(row, bounds):
 def col_zone(col, bounds):
     if bounds['col_third'] == 0:
         return 'center'
-    if col <= bounds['min_col'] + bounds['col_third']:
+    if col < bounds['min_col'] + bounds['col_third']:
         return 'left'
-    if col >= bounds['max_col'] - bounds['col_third']:
+    if col >= bounds['max_col'] + 1 - bounds['col_third']:
         return 'right'
     return 'center'
 
@@ -66,6 +66,8 @@ def col_zone(col, bounds):
 def find_contiguous_run(row_seats, n):
     """row_seats: seats in one row, any order. Returns a list of n seats with
     consecutive column values, all available, or None if no such run exists."""
+    if n <= 0:
+        return None
     sorted_row = sorted(row_seats, key=lambda s: s['column'])
     run = []
     for seat in sorted_row:

@@ -33,6 +33,10 @@ Run, from the project root:
 python3 scripts/discover_shows.py --date <YYYY-MM-DD> --movie-title "<film title>"
 ```
 
+- If the script exits with a non-zero status, or its stdout is not valid JSON
+  (as opposed to a valid empty array `[]`), the discovery step itself failed
+  — report that to the user (e.g. the API may be down or unreachable) rather
+  than treating it the same as "no showings today."
 - If this returns an empty array, retry **without** `--movie-title` for that
   date, and check whether any returned `movieTitle` looks like a fuzzy match
   for what the user asked for (titles are in Norwegian and may not match the
@@ -41,6 +45,11 @@ python3 scripts/discover_shows.py --date <YYYY-MM-DD> --movie-title "<film title
   are no showings of that film today and stop.
 - Otherwise, you now have the full candidate list: each entry has
   `showStart`, `screenName`, `theaterName`, `firmName`, `ticketSaleUrl`.
+- Before seat-checking any candidate, **skip** (do not seat-check) any
+  candidate whose `firmName` is not exactly `"Trondheim Kino"`. This skill is
+  scoped to that specific chain, and the discovery API's `location`-based
+  query alone doesn't guarantee every result belongs to it — other venues
+  could theoretically appear under the same city.
 
 ## Step 3 — Seat-check every candidate
 
@@ -117,13 +126,15 @@ candidate:
      return JSON.parse(decodeURIComponent(html.slice(arrStart, j)));
    }
    window.__seats = extractSeatmap(window.__seatmapCapture).map(s => (
-     {row: s.row, column: s.column, state: s.state, type: s.type, rowSymbol: s.rowSymbol}
+     {row: s.row, column: s.column, state: s.state, type: s.type, rowSymbol: s.rowSymbol, columnSymbol: s.columnSymbol}
    ));
    JSON.stringify({count: window.__seats.length, length: JSON.stringify(window.__seats).length});
    ```
 
    This drops fields `zone_match.py` doesn't use (`id`, `width`, `height`,
    `coordX`, `coordY`, `seatCode`) to keep the payload as small as possible,
+   but keeps `columnSymbol` (one extra field per seat, cheap) alongside
+   `rowSymbol` so Step 4 can report human-readable matched seat labels,
    and reports the reduced array's length in characters rather than dumping
    it — **do not** try to print the full JSON in one shot. The
    `javascript_tool`'s text result is truncated (observed consistently
@@ -145,7 +156,12 @@ candidate:
    redo the affected chunk rather than guessing at seat data. If
    `window.__seatmapCapture` was still `null` when this step ran, the patch
    in step 2 didn't catch the request (e.g. it fired before the patch was
-   installed) — re-run from step 1 for this candidate instead.
+   installed) — re-run this candidate from step 1, but **first perform the
+   cleanup step** (step 7 below: close the modal, confirm abandonment by
+   clicking "Ja") exactly as you would for a normal completed check, since
+   the "Neste" click in step 4 already created a server-side transaction
+   even though extraction failed. Jumping straight back to step 1 would
+   abandon that transaction without ever cancelling it.
 
 6. **Run the matcher**:
 
@@ -169,7 +185,13 @@ candidate:
    server-side; "Avbryt" would cancel the *close*, i.e. keep the
    transaction open — do not click it here). Do not skip this step on
    error — if extraction or matching failed, still perform this cleanup
-   before moving to the next candidate.
+   before moving to the next candidate. If this cleanup sequence itself
+   fails, or you cannot confirm the transaction was actually released (e.g.
+   the modal doesn't close, "Ja" has no visible effect, or a fresh reload of
+   the ticketSaleUrl still shows lingering "Dine seter" state), **do not**
+   silently move on — report this explicitly to the user as a flagged issue
+   for that specific showtime (time, room, and what was observed) alongside
+   the final results.
 8. **Pause a few seconds** before moving to the next candidate showtime —
    this is a real production checkout system, not a read-only API.
 
@@ -181,12 +203,15 @@ than treating it as a failure.
 ## Step 4 — Report results
 
 Present a ranked list (by `showStart`, ascending) of every showtime that
-matched, each with: time, room (`screenName`), cinema (`theaterName`), and
-`ticketSaleUrl` for the user to complete booking themselves. Mention the
-total checked vs. matched count for context (e.g. "6 showings today, 2 have
-room for 3 in the back"). If none matched, say so plainly and mention which
-showtimes exist today regardless, in case the user wants to relax their
-zone preference.
+matched, each with: time, room (`screenName`), cinema (`theaterName`),
+`ticketSaleUrl` for the user to complete booking themselves, and the actual
+matched seat labels — build these from `zone_match.py`'s `matches[].row`
+entry's `rowSymbol` plus each matched seat's `columnSymbol` (e.g. "Row 5,
+seats 10-12"). Mention the total checked vs. matched count for context (e.g.
+"6 showings today, 2 have room for 3 in the back"). If none matched, say so
+plainly and mention which showtimes exist today regardless, in case the user
+wants to relax their zone preference. Also surface any flagged
+cleanup-failure issues from Step 3 alongside the results.
 
 **Never** proceed to actually purchasing tickets or entering payment
 details — this skill's job ends at reporting viable showtimes.

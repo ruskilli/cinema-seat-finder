@@ -43,6 +43,12 @@ class TestZoneBounds(unittest.TestCase):
         self.assertEqual(col_zone(5, bounds), 'center')
         self.assertEqual(col_zone(9, bounds), 'right')
 
+    def test_middle_band_is_not_empty_for_a_six_row_room(self):
+        bounds = zone_bounds([seat(r, 0) for r in range(1, 7)])  # rows 1..6
+        zones = [row_zone(r, bounds) for r in range(1, 7)]
+        self.assertIn('middle', zones)
+        self.assertEqual(zones, ['front', 'front', 'middle', 'middle', 'back', 'back'])
+
 
 class TestFindContiguousRun(unittest.TestCase):
     def test_finds_simple_run(self):
@@ -65,6 +71,11 @@ class TestFindContiguousRun(unittest.TestCase):
         row = [seat(0, 0), seat(0, 1), seat(0, 8), seat(0, 9)]
         self.assertIsNone(find_contiguous_run(row, 3))
 
+    def test_non_positive_count_never_matches(self):
+        row = [seat(0, 0), seat(0, 1)]
+        self.assertIsNone(find_contiguous_run(row, 0))
+        self.assertIsNone(find_contiguous_run(row, -1))
+
 
 class TestFindMatch(unittest.TestCase):
     def test_end_to_end_match_in_requested_zone(self):
@@ -86,6 +97,14 @@ class TestFindMatch(unittest.TestCase):
         seats = [seat(0, c, seat_type='test4') for c in range(4)] + [seat(0, 10, seat_type='WC')]
         result = find_match(seats, n=3, zone_row=None)
         self.assertTrue(result['matched'])
+
+    def test_find_match_respects_zone_col(self):
+        # 9 columns wide; only the left-most 3 are contiguous & available
+        row = [seat(0, c) for c in range(3)] + [seat(0, c, state='booked') for c in range(3, 9)]
+        result_left = find_match(row, n=3, zone_col='left')
+        self.assertTrue(result_left['matched'])
+        result_right = find_match(row, n=3, zone_col='right')
+        self.assertFalse(result_right['matched'])
 
 
 if __name__ == '__main__':

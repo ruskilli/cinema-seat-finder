@@ -5,7 +5,6 @@ Endpoint verified working and introspectable, no auth required, as of
 """
 import argparse
 import json
-import sys
 import urllib.request
 
 GRAPHQL_ENDPOINT = "https://movieinfoqs.filmweb.no/graphql"
