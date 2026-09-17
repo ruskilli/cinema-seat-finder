@@ -246,7 +246,12 @@ or an active challenge on the data itself rather than just the storefront
    script also resolves/searches town names (`--search-location`) and lists
    cinema buildings in a town (`--list-cinemas`), and resolves/fetches movie
    info — synopsis, genre, runtime, age rating, premiere date, user rating
-   (`--search-movie` then `--movie-id`) — all against the same live API.
+   (`--search-movie` then `--movie-id`) — all against the same live API. A
+   nationwide result can run into the hundreds of shows, so
+   `scripts/group_showtimes.py` (for listing requests) and
+   `scripts/classify_candidates.py` (for seat-finding requests) do the
+   grouping/sorting/platform-classification in code rather than leaving
+   Claude to do it by hand over a large result.
 2. **Seat-check** — for a Filmgrail candidate, `scripts/filmgrail_checkout.py`
    drives the Filmgrail/Mars checkout flow directly over HTTP (select N
    tickets → open a transaction → read the seatmap → cancel the
@@ -297,6 +302,13 @@ python3 scripts/discover_shows.py --search-movie "Fjord"
 # Fetch full movie info (synopsis, genre, runtime, age rating, ...)
 python3 scripts/discover_shows.py --movie-id "EDI20260087"
 
+# Group a nationwide listing by film instead of a flat list of shows
+python3 scripts/discover_shows.py --date 2026-09-16 --location "" | python3 scripts/group_showtimes.py
+
+# Classify a film's candidate showtimes by seat-finding platform instead
+# of checking each one by hand
+python3 scripts/discover_shows.py --date 2026-09-16 --location "" --movie-title "Spider-Man" | python3 scripts/classify_candidates.py
+
 # Check seat availability for one showtime (opens and cleanly
 # cancels a real checkout transaction - safe, no purchase is made)
 python3 scripts/filmgrail_checkout.py "https://www.trondheimkino.no/showtime/1-112034-51438" --count 3
@@ -336,8 +348,9 @@ python3 scripts/nfkino_zone_match.py --count 3 --zone-row back --zone-col center
 
 ```bash
 cd scripts
-python3 -m unittest test_discover_shows test_filmgrail_zone_match test_filmgrail_checkout test_odeon_zone_match test_odeon_checkout test_ebillett_checkout test_ebillett_zone_match test_nfkino_checkout test_nfkino_zone_match
+python3 -m unittest test_discover_shows test_filmgrail_zone_match test_filmgrail_checkout test_odeon_zone_match test_odeon_checkout test_ebillett_checkout test_ebillett_zone_match test_nfkino_checkout test_nfkino_zone_match test_classify_candidates test_group_showtimes
 ```
 
-All nine test modules run entirely offline against fake/canned responses —
-no network access or real checkout transactions/API calls are involved.
+All eleven test modules run entirely offline against fake/canned
+responses — no network access or real checkout transactions/API calls
+are involved.

@@ -8,6 +8,37 @@ major version is `0`, minor bumps mark new capability and patch bumps mark
 fixes/docs/cosmetic changes — the same convention this project will keep
 once it reaches `1.0.0`.
 
+## [0.5.0] - 2026-09-17
+
+### Added
+
+- `classify_candidates.py`: buckets `discover_shows.py`'s candidate list
+  by seat-finding platform (Filmgrail/ODEON/ebillett.no/NFkino/
+  out-of-scope) in code, replacing manual per-candidate classification
+  against `references/platforms.md`'s table.
+- `group_showtimes.py`: groups a flat show list by film (sorted
+  alphabetically, showtimes sorted by start time) in code, replacing
+  manual grouping/sorting for listing requests - the one path that can
+  return hundreds of raw records nationwide.
+- A full Norwegian-language conversation screenshot in the README,
+  showing the skill works natively in Norwegian, unprompted.
+- `docs/other-agents.md`, split out of the README (Copilot/Gemini/any
+  other agent usage), linked from a one-line pointer instead.
+
+### Changed
+
+- `SKILL.md`'s Step 3 now redirects each checkout script's output to a
+  temp file and pipes `seats` file-to-file into the zone matcher,
+  instead of Claude reading the full array and retyping it into the next
+  command - the same potentially-large payload no longer passes through
+  context twice per candidate. Verified live against a real 128-seat
+  ODEON room.
+- README's Scope and Public APIs only sections trimmed - they were
+  re-explaining each platform's exact HTTP mechanics inline, duplicating
+  what's already in each checkout script's own module docstring and in
+  `SKILL.md`/`references/platforms.md`.
+- Stopped tagging every single commit (this release bundles several).
+
 ## [0.4.2] - 2026-09-16
 
 ### Added
@@ -166,6 +197,7 @@ once it reaches `1.0.0`.
 
 - Repo bootstrap.
 
+[0.5.0]: https://github.com/ruskilli/cinema-seat-finder/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/ruskilli/cinema-seat-finder/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/ruskilli/cinema-seat-finder/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ruskilli/cinema-seat-finder/compare/v0.3.1...v0.4.0

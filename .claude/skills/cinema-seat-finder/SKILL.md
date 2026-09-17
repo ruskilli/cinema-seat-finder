@@ -152,18 +152,27 @@ error handling as Step 2 applies: a non-zero exit, or stdout that isn't
 valid JSON, means discovery itself failed — report that rather than
 "nothing playing today."
 
-Group the results by `movieTitle` and present each film with its showtimes
-(time, `screenName`, `theaterName`, and — since results may now span many
-towns/chains — `firmName` too whenever it isn't already obvious from
-`theaterName`), sorted by start time. Include each showtime's
-`ticketSaleUrl` as a booking link whenever it's non-empty — this applies
-to *every* cinema listed, not just the seat-finding-supported ones: the
-user can always follow the link and check/book manually, so don't
-withhold it just because this skill can't check it itself. Stop here — do
-not seat-check anything unless the user follows up naming a film and
-party size. (If they do, and that film turns out to only be playing at
-out-of-scope cinemas, Step 2/4 below handles saying so plainly rather than
-reporting no matches.)
+A nationwide listing can return hundreds of shows — don't group/sort that
+many by hand. Pipe the result through `group_showtimes.py`, which hoists
+each film's `movieTitle` out to the group level and sorts groups
+alphabetically, showtimes within each by start time:
+
+```bash
+python3 scripts/discover_shows.py --date <YYYY-MM-DD> --location "<resolved town, or "" for nationwide>" [--exclude-past] \
+  | python3 scripts/group_showtimes.py
+```
+
+Present each film with its showtimes (time, `screenName`, `theaterName`,
+and — since results may now span many towns/chains — `firmName` too
+whenever it isn't already obvious from `theaterName`). Include each
+showtime's `ticketSaleUrl` as a booking link whenever it's non-empty —
+this applies to *every* cinema listed, not just the seat-finding-supported
+ones: the user can always follow the link and check/book manually, so
+don't withhold it just because this skill can't check it itself. Stop
+here — do not seat-check anything unless the user follows up naming a
+film and party size. (If they do, and that film turns out to only be
+playing at out-of-scope cinemas, Step 2/4 below handles saying so plainly
+rather than reporting no matches.)
 
 ### Seat-finding request
 
@@ -185,26 +194,35 @@ Run, from the project root, using the location resolved in Step 1
 (`--location ""` if the user named no town):
 
 ```bash
-python3 scripts/discover_shows.py --date <YYYY-MM-DD> --location "<resolved town, or "" for nationwide>" --movie-title "<film title>" [--exclude-past]
+python3 scripts/discover_shows.py --date <YYYY-MM-DD> --location "<resolved town, or "" for nationwide>" --movie-title "<film title>" [--exclude-past] | tee /tmp/candidates.json
 ```
 
-Same `--exclude-past` rule as **Listing request** above.
+`tee` shows you the result (this list, unlike a nationwide listing, is
+normally small enough to just read) while also saving it to a file, so
+classifying it below doesn't mean re-running discovery. Same
+`--exclude-past` rule as **Listing request** above.
 
-- If the script exits with a non-zero status, or its stdout is not valid JSON
-  (as opposed to a valid empty array `[]`), the discovery step itself failed
-  — report that to the user rather than treating it the same as "no
-  showings today."
-- If this returns an empty array, retry **without** `--movie-title` (same
-  location and date), and check whether any returned `movieTitle` looks
-  like a fuzzy match for what the user asked for (titles are in Norwegian
-  and may not match the user's exact wording). If you find a plausible
-  match, confirm it with the user before proceeding. If nothing plausible
-  exists, tell the user there are no showings of that film today (in that
-  town, if one was given) and stop.
-- Otherwise, classify each candidate against `references/platforms.md`'s
-  table (`firmName` for Filmgrail, `ticketSaleUrl` domain for the other
-  three) — everything else is out-of-scope. Only seat-check in-scope
-  candidates in Step 3.
+- If the script exits with a non-zero status, or its output isn't valid
+  JSON (as opposed to a valid empty array `[]`), the discovery step
+  itself failed — report that to the user rather than treating it the
+  same as "no showings today."
+- If it's an empty array, retry **without** `--movie-title` (same
+  location and date, still through `tee` into `/tmp/candidates.json`),
+  and check whether any returned `movieTitle` looks like a fuzzy match
+  for what the user asked for (titles are in Norwegian and may not match
+  the user's exact wording). If you find a plausible match, confirm it
+  with the user before proceeding. If nothing plausible exists, tell the
+  user there are no showings of that film today (in that town, if one was
+  given) and stop.
+- Otherwise, classify the candidates instead of checking each one by hand
+  against `references/platforms.md`'s table:
+
+  ```bash
+  python3 scripts/classify_candidates.py < /tmp/candidates.json
+  ```
+
+  This prints `{"filmgrail": [...], "odeon": [...], "ebillett": [...], "nfkino": [...], "out_of_scope": [...]}`.
+  Only seat-check the four in-scope groups in Step 3.
 - Keep the out-of-scope list around (don't discard it) — Step 4 always
   mentions these, with their `ticketSaleUrl` as a manual-check link,
   whether or not any in-scope candidate matched. Only skip Step 3 entirely
