@@ -214,47 +214,59 @@ Same `--exclude-past` rule as **Listing request** above.
 ## Step 3 — Seat-check every candidate
 
 For **each** in-scope candidate (all of them — this is deliberately
-thorough, not just a top-N subset), run that platform's checkout script:
+thorough, not just a top-N subset), run that platform's checkout script,
+**redirected to a file** rather than read directly — a room's `seats`
+array can run into the hundreds of entries, and you never need to see it
+yourself, only the small fields around it and the matcher's final
+verdict. Reuse the same path each time; checks are sequential, so nothing
+overwrites a check still in progress.
 
 ```bash
-python3 scripts/filmgrail_checkout.py "<ticketSaleUrl>" --count <N>
-python3 scripts/odeon_checkout.py "<ticketSaleUrl>"                 # no --count - read-only
-python3 scripts/ebillett_checkout.py "<ticketSaleUrl>" --count <N>
-python3 scripts/nfkino_checkout.py "<ticketSaleUrl>" --count <N>
+python3 scripts/filmgrail_checkout.py "<ticketSaleUrl>" --count <N> > /tmp/seatcheck.json
+python3 scripts/odeon_checkout.py "<ticketSaleUrl>" > /tmp/seatcheck.json                 # no --count - read-only
+python3 scripts/ebillett_checkout.py "<ticketSaleUrl>" --count <N> > /tmp/seatcheck.json
+python3 scripts/nfkino_checkout.py "<ticketSaleUrl>" --count <N> > /tmp/seatcheck.json
 ```
 
-Each prints one JSON object to stdout:
-`{"status": "ok"|"error", "seats": [...]|null, "error": "..."|null[, "cancelStatus": "..."]}`
+Then read back everything *except* `seats`:
+
+```bash
+python3 -c "import json; d = json.load(open('/tmp/seatcheck.json')); print({k: v for k, v in d.items() if k != 'seats'})"
+```
+
+This prints `{"status": "ok"|"error", "error": "..."|None[, "cancelStatus": "..."]}`
 (the `cancelStatus` field and its possible values are per-platform — see
 `references/platforms.md`; ODEON never has it at all).
 
-1. Parse the JSON.
-2. `status: "error"` is a genuine failure (network issue, page shape
+1. `status: "error"` is a genuine failure (network issue, page shape
    changed, ticket category unavailable), **not** "sold out" — a fully
    booked room just returns zero available seats at the matcher step
    below, which naturally reports no match. Skip this candidate but note
    the error for Step 4.
-3. Where `cancelStatus` is present and `"failed"`, flag it for Step 4 too
+2. Where `cancelStatus` is present and `"failed"`, flag it for Step 4 too
    — a genuine failure to even *send* the cleanup request is worth
    surfacing, even though `"attempted"` itself isn't a strong guarantee
    either. `"not_created"` is fine and expected whenever `status` is
    `"error"` before a hold ever existed.
-4. If `status` is `"ok"`, pipe `seats` into that platform's own matcher
-   (identical CLI shape across all four — swap the script name to match
-   the candidate's platform):
+3. If `status` is `"ok"`, feed `seats` straight from the file into that
+   platform's own matcher — pipe file → matcher, never retype or
+   re-print the array yourself (identical CLI shape across all four —
+   swap the script name to match the candidate's platform):
 
 ```bash
-python3 scripts/filmgrail_zone_match.py --count <N> \
-  [--zone-row front|middle|back] [--zone-col left|center|right] \
-  <<< '<seats JSON array>'
+python3 -c "import json; print(json.dumps(json.load(open('/tmp/seatcheck.json'))['seats']))" \
+  | python3 scripts/filmgrail_zone_match.py --count <N> \
+      [--zone-row front|middle|back] [--zone-col left|center|right]
 ```
 
-Record whether `matched` is `true` for this showtime. Then **pause a few
-seconds** before moving to the next candidate — Filmgrail, ebillett.no,
-and NFkino all open real holds on production checkout systems, so never
-fire candidates back-to-back; ODEON's read-only check doesn't strictly
-need the same pause for correctness, but keep it anyway as a default
-courtesy to someone else's production API.
+Only the small match result prints to your context. Record whether
+`matched` is `true` for this showtime, and (from `matches[]`) the actual
+seat labels if so. Then **pause a few seconds** before moving to the next
+candidate — Filmgrail, ebillett.no, and NFkino all open real holds on
+production checkout systems, so never fire candidates back-to-back;
+ODEON's read-only check doesn't strictly need the same pause for
+correctness, but keep it anyway as a default courtesy to someone else's
+production API.
 
 ## Step 4 — Report results
 
